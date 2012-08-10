@@ -30,6 +30,10 @@ ifeq ($(CONFIG_X86_32),y)
         # prevent gcc from keeping the stack 16 byte aligned
         KBUILD_CFLAGS += $(call cc-option,-mpreferred-stack-boundary=2)
 
+        # Never want PIC in a 32-bit kernel, prevent breakage with GCC built
+        # with nonstandard options
+        KBUILD_CFLAGS += -fno-pic
+
         # Disable unit-at-a-time mode on pre-gcc-4.0 compilers, it makes gcc use
         # a lot more stack due to the lack of sharing of stacklots:
         KBUILD_CFLAGS += $(call cc-ifversion, -lt, 0400, \
