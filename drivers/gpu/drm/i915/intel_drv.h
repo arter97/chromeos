@@ -49,8 +49,11 @@
 				ret__ = -ETIMEDOUT;			\
 			break;						\
 		}							\
-		if (W && drm_can_sleep())				\
+		if (W && drm_can_sleep())  {				\
 			usleep_range(W * 50, W * 100);			\
+		} else {						\
+			cpu_relax();					\
+		}							\
 	}								\
 	ret__;								\
 })
