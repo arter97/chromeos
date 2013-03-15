@@ -11,6 +11,7 @@
 #include <linux/user_namespace.h>
 #include <linux/highuid.h>
 #include <linux/cred.h>
+#include <linux/fs_struct.h>
 
 static struct kmem_cache *user_ns_cachep __read_mostly;
 
@@ -27,6 +28,15 @@ int create_user_ns(struct cred *new)
 	struct user_namespace *ns;
 	struct user_struct *root_user;
 	int n;
+
+	/*
+	 * Verify that we can not violate the policy of which files
+	 * may be accessed that is specified by the root directory,
+	 * by verifing that the root directory is at the root of the
+	 * mount namespace which allows all files to be accessed.
+	 */
+	if (current_chrooted())
+		return -EPERM;
 
 	ns = kmem_cache_alloc(user_ns_cachep, GFP_KERNEL);
 	if (!ns)
