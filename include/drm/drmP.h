@@ -152,6 +152,7 @@ int drm_err(const char *func, const char *format, ...);
 #define DRIVER_GEM         0x1000
 #define DRIVER_MODESET     0x2000
 #define DRIVER_PRIME       0x4000
+#define DRIVER_RENDER      0x8000
 
 #define DRIVER_BUS_PCI 0x1
 #define DRIVER_BUS_PLATFORM 0x2
@@ -306,6 +307,7 @@ typedef int drm_ioctl_compat_t(struct file *filp, unsigned int cmd,
 #define DRM_ROOT_ONLY	0x4
 #define DRM_CONTROL_ALLOW 0x8
 #define DRM_UNLOCKED	0x10
+#define DRM_RENDER_ALLOW 0x20
 
 struct drm_ioctl_desc {
 	unsigned int cmd;
@@ -1197,6 +1199,7 @@ struct drm_device {
 	unsigned int agp_buffer_token;
 	struct drm_minor *control;		/**< Control node for card */
 	struct drm_minor *primary;		/**< render type primary screen head */
+	struct drm_minor *render;		/**< render node for card */
 
         struct drm_mode_config mode_config;	/**< Current mode config */
 
@@ -1284,6 +1287,11 @@ static inline int drm_device_is_unplugged(struct drm_device *dev)
 	int ret = atomic_read(&dev->unplugged);
 	smp_rmb();
 	return ret;
+}
+
+static inline bool drm_is_render_client(struct drm_file *file_priv)
+{
+	return file_priv->minor->type == DRM_MINOR_RENDER;
 }
 
 /******************************************************************/
@@ -1508,6 +1516,7 @@ extern void drm_put_dev(struct drm_device *dev);
 extern int drm_put_minor(struct drm_minor **minor);
 extern void drm_unplug_dev(struct drm_device *dev);
 extern unsigned int drm_debug;
+extern unsigned int drm_rnodes;
 
 extern unsigned int drm_vblank_offdelay;
 extern unsigned int drm_timestamp_precision;
