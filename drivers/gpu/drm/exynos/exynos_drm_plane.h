@@ -11,4 +11,6 @@
 
 struct drm_plane *exynos_plane_init(struct drm_device *dev,
 				    unsigned int possible_crtcs, bool priv);
+int exynos_plane_set_zpos_ioctl(struct drm_device *dev, void *data,
+				struct drm_file *file_priv);
 struct exynos_drm_overlay *get_exynos_drm_overlay(struct drm_plane *plane);
