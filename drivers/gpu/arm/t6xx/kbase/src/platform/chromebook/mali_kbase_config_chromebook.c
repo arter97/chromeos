@@ -160,7 +160,7 @@ static int pm_callback_power_on(kbase_device *kbdev)
 #ifdef CONFIG_PM_RUNTIME
 	pm_runtime_resume(kbdev->osdev.dev);
 #endif /* CONFIG_PM_RUNTIME */
-	return 0;
+	return 1;
 }
 
 /**
