@@ -1,0 +1,559 @@
+/*
+ * Google Skate board device tree source
+ *
+ * Copyright (c) 2014 Google, Inc
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+
+/dts-v1/;
+/include/ "exynos5250.dtsi"
+/include/ "cros5250-common.dtsi"
+
+/ {
+	model = "Google Skate";
+	compatible = "google,skate", "samsung,exynos5250";
+
+	adc@12D10000 {
+		status = "disabled";
+	};
+
+	mipi {
+		status = "disabled";
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		lid-switch {
+			label = "Lid";
+			gpios = <&gpx3 5 0 0x10000 0>;
+			linux,input-type = <5>; /* EV_SW */
+			linux,code = <0>; /* SW_LID */
+			debounce-interval = <1>;
+			gpio-key,wakeup;
+		};
+	};
+
+	dwmmc1@12210000 {
+		/*
+		 * MMC1 port is used for external Wifi card SDIO connection.
+		 *
+		 * We override the default configuration for this port which
+		 * disables it in cros5250-common.dtsi.
+		 */
+		status = "okay";
+		/* high speed is currently not behaving properly */
+		//supports-highspeed;
+		card-detection-broken;
+		no-write-protect;
+		keep-power-in-suspend;
+		enable-sdio-wakeup;
+		fifo-depth = <0x80>;
+		card-detect-delay = <200>;
+		samsung,dw-mshc-sdr-timing = <2 3 3>;
+		samsung,dw-mshc-ddr-timing = <1 2 3>;
+
+		slot0 {
+			bus-width = <4>;
+			gpios = <&gpc2 1 2 3 3>, <&gpc2 0 2 0 3>,
+				<&gpc2 3 2 3 3>, <&gpc2 4 2 3 3>,
+				<&gpc2 5 2 3 3>, <&gpc2 6 2 3 3>;
+		};
+	};
+
+	dwmmc2@12220000 {
+		/* MMC2 pins are used as GPIO for eDP bridge control */
+		status = "disabled";
+	};
+
+	dwmmc3@12230000 {
+		/*
+		 * Nothing is connected on MMC3 port : disable it.
+		 *
+		 * We override the default configuration for this port which
+		 * configures it for SDIO in cros5250-common.dtsi.
+		 */
+		status = "disabled";
+	};
+
+	i2c@12C90000 {
+		samsung,i2c-sda-delay = <100>;
+		samsung,i2c-max-bus-freq = <400000>;
+		gpios = <&gpa1 2 3 3 0>,
+			<&gpa1 3 3 3 0>;
+
+		tpm {
+			compatible = "infineon,slb9645tt";
+			reg = <0x20>;
+			powered-while-suspended;
+		};
+	};
+
+	i2c@12C60000 {
+		s5m8767_pmic@66 {
+			compatible = "samsung,s5m8767-pmic";
+			interrupt-parent = <&wakeup_eint>;
+			interrupts = <26 0>;
+			wakeup-source;
+			reg = <0x66>;
+
+			s5m-core,enable-low-jitter;
+			s5m-core,device_type = <2>;
+			s5m8767,buck_ramp_delay = <25>;		/* default */
+			s5m8767,buck2_ramp_enable;		/* default */
+			s5m8767,buck3_ramp_enable;		/* default */
+			s5m8767,buck4_ramp_enable;		/* default */
+
+			voltage-regulators {
+				s5m_ldo4_reg: LDO4 {
+					regulator-name = "vdd_ldo4";
+					regulator-min-microvolt = <1000000>;
+					regulator-max-microvolt = <1000000>;
+					regulator-always-on;
+					reg_op_mode = <0>; /* Off Mode */
+				};
+				s5m_ldo5_reg: LDO5 {
+					regulator-name = "vdd_ldo5";
+					regulator-min-microvolt = <1000000>;
+					regulator-max-microvolt = <1000000>;
+					regulator-always-on;
+					reg_op_mode = <0>; /* Off Mode */
+				};
+				s5m_ldo6_reg: LDO6 {
+					regulator-name = "vdd_mydp";
+					regulator-min-microvolt = <1000000>;
+					regulator-max-microvolt = <1000000>;
+					regulator-always-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+				s5m_ldo7_reg: LDO7 {
+					regulator-name = "vdd_ldo7";
+					regulator-min-microvolt = <1100000>;
+					regulator-max-microvolt = <1100000>;
+					regulator-always-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+				s5m_ldo8_reg: LDO8 {
+					regulator-name = "vdd_ldo8";
+					regulator-min-microvolt = <1000000>;
+					regulator-max-microvolt = <1000000>;
+					regulator-always-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+				s5m_ldo10_reg: LDO10 {
+					regulator-name = "vdd_ldo10";
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <1800000>;
+					regulator-always-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+				s5m_ldo11_reg: LDO11 {
+					regulator-name = "vdd_ldo11";
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <1800000>;
+					regulator-always-on;
+					reg_op_mode = <0>; /* Off Mode */
+				};
+				s5m_ldo12_reg: LDO12 {
+					regulator-name = "vdd_ldo12";
+					regulator-min-microvolt = <3000000>;
+					regulator-max-microvolt = <3000000>;
+					regulator-always-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+				s5m_ldo13_reg: LDO13 {
+					regulator-name = "vdd_ldo13";
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <1800000>;
+					regulator-always-on;
+					reg_op_mode = <0>; /* Off Mode */
+				};
+				s5m_ldo14_reg: LDO14 {
+					regulator-name = "vdd_ldo14";
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <1800000>;
+					regulator-always-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+				s5m_ldo15_reg: LDO15 {
+					regulator-name = "vdd_ldo15";
+					regulator-min-microvolt = <1000000>;
+					regulator-max-microvolt = <1000000>;
+					regulator-always-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+				s5m_ldo16_reg: LDO16 {
+					regulator-name = "vdd_ldo16";
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <1800000>;
+					regulator-always-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+				s5m_ldo17_reg: LDO17 {
+					regulator-name = "vdd_ldo17";
+					regulator-min-microvolt = <2800000>;
+					regulator-max-microvolt = <2800000>;
+					regulator-always-on;
+					reg_op_mode = <0>; /* Off Mode */
+				};
+				s5m_ldo25_reg: LDO25 {
+					regulator-name = "vdd_bridge";
+					regulator-min-microvolt = <1200000>;
+					regulator-max-microvolt = <1200000>;
+					reg_op_mode = <3>; /* Normal Mode */
+				};
+				s5m_buck1_reg: BUCK1 {
+					regulator-name = "vdd_mif";
+					regulator-min-microvolt = <950000>;
+					regulator-max-microvolt = <1300000>;
+					regulator-always-on;
+					regulator-boot-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+
+				s5m_buck2_reg: BUCK2 {
+					regulator-name = "vdd_arm";
+					regulator-min-microvolt = <850000>;
+					regulator-max-microvolt = <1350000>;
+					regulator-boot-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+
+				s5m_buck3_reg: BUCK3 {
+					regulator-name = "vdd_int";
+					regulator-min-microvolt = <900000>;
+					regulator-max-microvolt = <1200000>;
+					regulator-boot-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+
+				s5m_buck4_reg: BUCK4 {
+					regulator-name = "vdd_g3d";
+					regulator-min-microvolt = <850000>;
+					regulator-max-microvolt = <1300000>;
+					regulator-boot-on;
+					reg_op_mode = <1>; /* Standby Mode */
+				};
+
+				s5m_buck5_reg: BUCK5 {
+					regulator-name = "vdd_1v8";
+					regulator-min-microvolt = <1800000>;
+					regulator-max-microvolt = <1800000>;
+					regulator-always-on;
+					regulator-boot-on;
+					reg_op_mode = <3>; /* Normal Mode */
+				};
+
+				s5m_buck6_reg: BUCK6 {
+					regulator-name = "vdd_buck6";
+					regulator-min-microvolt = <1200000>;
+					regulator-max-microvolt = <1200000>;
+					regulator-always-on;
+					regulator-boot-on;
+					reg_op_mode = <0>; /* Off Mode */
+				};
+
+				s5m_buck8_reg: BUCK8 {
+					regulator-name = "vdd_1v35_ldoin";
+					regulator-min-microvolt = <1350000>;
+					regulator-max-microvolt = <1350000>;
+					regulator-always-on;
+					regulator-boot-on;
+					reg_op_mode = <3>; /* Normal Mode */
+					pmu_mode = <3>;
+				};
+
+				s5m_buck9_reg: BUCK9 {
+					regulator-name = "vdd_ummc";
+					regulator-min-microvolt = <900000>;
+					regulator-max-microvolt = <3000000>;
+					regulator-always-on;
+					regulator-boot-on;
+					reg_op_mode = <1>;
+				};
+
+				s5m_en32khz_ap: EN32KHZ_AP {
+					regulator-name = "en32khz_ap";
+					regulator-boot-on;
+					reg_op_mode = <1>; /* Normal Mode */
+				};
+
+				s5m_en32khz_cp: EN32KHZ_CP {
+					regulator-name = "en32khz_cp";
+					regulator-boot-on;
+					reg_op_mode = <1>; /* Normal Mode */
+				};
+
+				s5m_en32khz_bt: EN32KHZ_BT {
+					regulator-name = "en32khz_bt";
+					regulator-boot-on;
+					reg_op_mode = <1>; /* Normal Mode */
+				};
+			};
+		};
+	};
+
+	i2c@12C70000 {
+		trackpad-alt {
+			reg=<0x4b>;
+			compatible="atmel,atmel_mxt_tp";
+			interrupts=<10 0>;
+			interrupt-parent=<&wakeup_eint>;
+			wakeup-source;
+		};
+		trackpad-bootloader {
+			reg=<0x25>;
+			compatible="atmel,atmel_mxt_tp";
+			interrupts=<10 0>;
+			interrupt-parent=<&wakeup_eint>;
+			wakeup-source;
+		};
+	};
+
+	i2c@12CA0000 {
+		ec: chromeos-ec@0 {
+			i2c-passthrough {
+				battery: sbs-battery@b {
+					compatible = "sbs,sbs-battery";
+					reg = <0xb>;
+					sbs,poll-retry-count = <1>;
+				};
+			};
+
+			charger {
+				compatible = "ti,cros_ec-charger";
+                        };
+			power-regulator {
+				compatible = "ti,cros_ec-tps65090";
+
+				voltage-regulators {
+					VFET1 {
+						tps65090-control-reg = <0x0f>;
+						regulator-name = "vcd_led";
+						regulator-min-microvolt = <12000000>;
+						regulator-max-microvolt = <12000000>;
+					};
+					VFET3 {
+						tps65090-control-reg = <0x11>;
+						regulator-name = "wwan_r";
+						regulator-min-microvolt = <3300000>;
+						regulator-max-microvolt = <3300000>;
+						regulator-always-on;
+					};
+					VFET5 {
+						tps65090-control-reg = <0x13>;
+						regulator-name = "cam";
+						regulator-min-microvolt = <3300000>;
+						regulator-max-microvolt = <3300000>;
+						regulator-always-on;
+					};
+					VFET6 {
+						tps65090-control-reg = <0x14>;
+						regulator-name = "lcd_vdd";
+						regulator-min-microvolt = <3300000>;
+						regulator-max-microvolt = <3300000>;
+					};
+					VFET7 {
+						tps65090-control-reg = <0x15>;
+						regulator-name = "ts";
+						regulator-min-microvolt = <5000000>;
+						regulator-max-microvolt = <5000000>;
+					};
+				};
+			};
+		};
+	};
+
+	i2c@12CD0000 {
+		ps8622-bridge@8 {
+			compatible = "parade,ps8622";
+			reg = <0x08>;
+			sleep-gpio = <&gpc3 6 1 0 0>;
+			reset-gpio = <&gpc3 1 1 0 0>;
+			hpd-gpio = <&gpc3 0 0 0 0>;
+		};
+
+		codec {
+			compatible = "maxim,max98089", "maxim,max98088";
+			reg = <0x10>;
+			mic-left-digital;
+			mic-right-digital;
+			mclk-pin = <2>;
+		};
+
+		temp-sensor {
+			compatible = "gmt,g781";
+			reg = <0x4c>;
+		};
+
+		anx7808-bridge@38 {
+			compatible = "analogix,anx7808";
+			reg = <0x38>;
+			pd-gpio = <&gpe0 6 1 0 0>;
+			reset-gpio = <&gpe0 7 1 0 0>;
+			cable-det-gpio = <&gpx0 7 0 0 0>;
+			intp-gpio = <&gpf0 0 0 0 0>;
+		};
+
+	};
+
+	sound {
+		compatible = "google,daisy-audio-max98089";
+		samsung,mic-det-gpios = <&gpx2 0 2 0x10000 0>;
+		samsung,hp-det-gpios = <&gpx2 2 2 0 0>;
+	};
+
+	gpio-controllers {
+		gpa0: gpio-controller@11400000 {
+			powerdown-settings = <6 6 6 6 3 3 2 2>;
+		};
+
+		gpa1: gpio-controller@11400020 {
+			powerdown-settings = <3 3 2 2 3 3>;
+		};
+
+		gpa2: gpio-controller@11400040 {
+			powerdown-settings = <2 2 2 2 3 2 2 2>;
+		};
+
+		gpb0: gpio-controller@11400060 {
+			powerdown-settings = <3 3 3 3 3>;
+		};
+
+		gpb1: gpio-controller@11400080 {
+			powerdown-settings = <3 3 3 3 3>;
+		};
+
+		gpb2: gpio-controller@114000A0 {
+			powerdown-settings = <3 3 2 2>;
+		};
+
+		gpb3: gpio-controller@114000C0 {
+			powerdown-settings = <2 2 2 2>;
+		};
+
+		gpc0: gpio-controller@114000E0 {
+			powerdown-settings = <6 2 2 2 2 2 2>;
+		};
+
+		gpc1: gpio-controller@11400100 {
+			powerdown-settings = <2 2 2 2>;
+		};
+
+		gpc2: gpio-controller@11400120 {
+			powerdown-settings = <3 1 3 3 3 3 3>;
+		};
+
+		gpc3: gpio-controller@11400140 {
+			powerdown-settings = <6 2 1 2 2 2 2>;
+		};
+
+		gpc4: gpio-controller@114002E0 {
+			powerdown-settings = <6 2 3 2 2 2 2>;
+		};
+
+		gpd0: gpio-controller@11400160 {
+			powerdown-settings = <6 6 3 3>;
+		};
+
+		gpd1: gpio-controller@11400180 {
+			powerdown-settings = <6 6 6 3 3 6 1 1>;
+		};
+
+		gpy0: gpio-controller@114001A0 {
+			powerdown-settings = <3 3 6 3 3 3>;
+		};
+
+		gpy1: gpio-controller@114001C0 {
+			powerdown-settings = <5 3 3 3>;
+		};
+
+		gpy2: gpio-controller@114001E0 {
+			powerdown-settings = <3 3 3 3 3 2>;
+		};
+
+		gpy3: gpio-controller@11400200 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		gpy4: gpio-controller@11400220 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		gpy5: gpio-controller@11400240 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		gpy6: gpio-controller@11400260 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		/* gpx0: No powerdown mode, uses active mode on suspend */
+		/* gpx1: No powerdown mode, uses active mode on suspend */
+		/* gpx2: No powerdown mode, uses active mode on suspend */
+		/* gpx3: No powerdown mode, uses active mode on suspend */
+
+		gpe0: gpio-controller@13400000 {
+			powerdown-settings = <5 3 3 3 2 2 3 3>;
+		};
+
+		gpe1: gpio-controller@13400020 {
+			powerdown-settings = <5 3>;
+		};
+
+		gpf0: gpio-controller@13400040 {
+			powerdown-settings = <3 3 1 2>;
+		};
+
+		gpf1: gpio-controller@13400060 {
+			powerdown-settings = <3 3 3 3>;
+		};
+
+		gpg0: gpio-controller@13400080 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		gpg1: gpio-controller@134000A0 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		gpg2: gpio-controller@134000C0 {
+			powerdown-settings = <3 3>;
+		};
+
+		gph0: gpio-controller@134000E0 {
+			powerdown-settings = <3 3 3 3>;
+		};
+
+		gph1: gpio-controller@13400100 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		gpv0: gpio-controller@10D10000 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		gpv1: gpio-controller@10D10020 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		gpv2: gpio-controller@10D10040 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		gpv3: gpio-controller@10D10060 {
+			powerdown-settings = <3 3 3 3 3 3 3 3>;
+		};
+
+		gpv4: gpio-controller@10D10080 {
+			powerdown-settings = <3 3>;
+		};
+
+		gpz: gpio-controller@03860000 {
+			powerdown-settings = <6 3 6 6 6 3 3>;
+		};
+	};
+};

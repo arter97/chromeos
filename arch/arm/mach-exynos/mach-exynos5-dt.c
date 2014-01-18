@@ -695,6 +695,7 @@ static bool enable_mwi87xx(void)
 static void exynos_wifi_bt_set_power(u32 slot_id, u32 volt)
 {
 	if (volt == 0 || (!of_machine_is_compatible("google,snow") &&
+			  !of_machine_is_compatible("google,snow") &&
 			  !of_machine_is_compatible("google,spring") &&
 			  !of_machine_is_compatible("google,daisy")))
 		return;
@@ -1102,7 +1103,8 @@ static void __init exynos5250_dt_machine_init(void)
 #endif
 		dsim_lcd_info.lcd_size.width = 1366;
 		dsim_lcd_info.lcd_size.height = 768;
-	} else if ((of_machine_is_compatible("google,snow")) ||
+	} else if ((of_machine_is_compatible("google,skate")) ||
+		   (of_machine_is_compatible("google,snow")) ||
 		   (of_machine_is_compatible("google,spring"))) {
 #ifdef CONFIG_DRM_EXYNOS_FIMD
 		smdk5250_lcd1_pdata.panel.timing = snow_fb_window;

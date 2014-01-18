@@ -420,7 +420,8 @@ static int daisy_init(struct snd_soc_pcm_runtime *rtd)
 	/* Microphone BIAS has to be kept on so that the mic-detection circuit
 	 * will operate correctly.
 	 */
-	if (of_machine_is_compatible("google,spring"))
+	if ((of_machine_is_compatible("google,skate")) ||
+	    (of_machine_is_compatible("google,spring")))
 		snd_soc_dapm_force_enable_pin(dapm, "MICBIAS");
 	else
 		snd_soc_dapm_force_enable_pin(dapm, "MICBIAS2");
@@ -524,7 +525,8 @@ static __devinit int daisy_max98095_driver_probe(struct platform_device *pdev)
 	 * so we're doing this only half-way now.
 	 */
 
-	if (!of_machine_is_compatible("google,snow") &&
+	if (!of_machine_is_compatible("google,skate") &&
+	    !of_machine_is_compatible("google,snow") &&
 	    !of_machine_is_compatible("google,spring") &&
 	    !of_machine_is_compatible("google,daisy"))
 		return -ENODEV;
