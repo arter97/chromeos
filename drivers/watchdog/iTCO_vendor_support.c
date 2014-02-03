@@ -45,14 +45,17 @@
 #define SUPERMICRO_OLD_BOARD	1
 /* SuperMicro Pentium 4 / Xeon 4 / EMT64T Era Systems */
 #define SUPERMICRO_NEW_BOARD	2
+/* x86/x86_64 chromebooks */
+#define CHROMEOS		3
+
 /* Broken BIOS */
 #define BROKEN_BIOS		911
 
 static int vendorsupport;
 module_param(vendorsupport, int, 0);
-MODULE_PARM_DESC(vendorsupport, "iTCO vendor specific support mode, default="
-			"0 (none), 1=SuperMicro Pent3, 2=SuperMicro Pent4+, "
-							"911=Broken SMI BIOS");
+MODULE_PARM_DESC(vendorsupport, "iTCO vendor specific support mode, "
+		"0=none (default), 1=SuperMicro Pent3, 2=SuperMicro Pent4+, "
+		"3=ChromeOS, 911=Broken SMI BIOS");
 
 /*
  *	Vendor Specific Support
@@ -240,6 +243,52 @@ static void supermicro_new_pre_set_heartbeat(unsigned int heartbeat)
 }
 
 /*
+ *	Vendor Support: 3
+ *	Board: Some x86/x86_64 Chromebooks with old firmware
+ *
+ *	Disable TCO SMI when the watchdog timer is enabled. On some existing
+ *	devices this workaround is needed because the TCO SMI handler in
+ *	coreboot clears the TIMEOUT bit (bit 3) of TCO1_STS register
+ *	(at TCOBASE + 04h). Clearing TIMEOUT prevents the machine from
+ *	rebooting. This workaround makes the watchdog work on existing devices,
+ *	but it is not necessary for devices with updated firmware that doesn't
+ *	enable TCO SMI.
+ *
+ *	Bit 13: TCO_EN	-> 0 = Disables TCO logic generating an SMI#
+ *			-> 1 = Enables TCO logic generating an SMI#
+ */
+
+#define TCO_EN_MASK (1 << 13)
+static bool chromeos_tco_smi_forced_off;
+
+static void chromeos_start(unsigned long acpibase)
+{
+	unsigned long val32;
+
+	val32 = inl(SMI_EN);
+	if (!(val32 & TCO_EN_MASK))
+		return;
+	val32 &= ~TCO_EN_MASK;
+	outl(val32, SMI_EN);
+
+	chromeos_tco_smi_forced_off = true;
+}
+
+static void chromeos_stop(unsigned long acpibase)
+{
+	unsigned long val32;
+
+	if (!chromeos_tco_smi_forced_off)
+		return;
+
+	val32 = inl(SMI_EN);
+	val32 |= TCO_EN_MASK;
+	outl(val32, SMI_EN);
+
+	chromeos_tco_smi_forced_off = false;
+}
+
+/*
  *	Vendor Support: 911
  *	Board: Some Intel ICHx based motherboards
  *	iTCO chipset: ICH7+
@@ -309,6 +358,9 @@ void iTCO_vendor_pre_start(unsigned long acpibase,
 	case BROKEN_BIOS:
 		broken_bios_start(acpibase);
 		break;
+	case CHROMEOS:
+		chromeos_start(acpibase);
+		break;
 	}
 }
 EXPORT_SYMBOL(iTCO_vendor_pre_start);
@@ -324,6 +376,9 @@ void iTCO_vendor_pre_stop(unsigned long acpibase)
 		break;
 	case BROKEN_BIOS:
 		broken_bios_stop(acpibase);
+		break;
+	case CHROMEOS:
+		chromeos_stop(acpibase);
 		break;
 	}
 }
