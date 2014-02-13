@@ -2761,7 +2761,6 @@ static int mvneta_probe(struct platform_device *pdev)
 	const char *mac_from;
 	int phy_mode;
 	int err;
-	int cpu;
 
 	/* Our multiqueue support is not complete, so for now, only
 	 * allow the usage of the first RX queue
@@ -2828,16 +2827,10 @@ static int mvneta_probe(struct platform_device *pdev)
 	}
 
 	/* Alloc per-cpu stats */
-	pp->stats = alloc_percpu(struct mvneta_pcpu_stats);
+	pp->stats = netdev_alloc_pcpu_stats(struct mvneta_pcpu_stats);
 	if (!pp->stats) {
 		err = -ENOMEM;
 		goto err_clk;
-	}
-
-	for_each_possible_cpu(cpu) {
-		struct mvneta_pcpu_stats *stats;
-		stats = per_cpu_ptr(pp->stats, cpu);
-		u64_stats_init(&stats->syncp);
 	}
 
 	dt_mac_addr = of_get_mac_address(dn);
