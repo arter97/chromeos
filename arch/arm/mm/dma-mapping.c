@@ -292,7 +292,7 @@ early_param("coherent_pool", early_coherent_pool);
 static int __init atomic_pool_init(void)
 {
 	struct dma_pool *pool = &atomic_pool;
-	pgprot_t prot = pgprot_dmacoherent(pgprot_kernel);
+	pgprot_t prot = pgprot_dmacoherent(PAGE_KERNEL);
 	unsigned long nr_pages = pool->size >> PAGE_SHIFT;
 	unsigned long *bitmap;
 	struct page *page;
@@ -525,7 +525,7 @@ static void *__alloc_from_contiguous(struct device *dev, size_t size,
 static void __free_from_contiguous(struct device *dev, struct page *page,
 				   size_t size)
 {
-	__dma_remap(page, size, pgprot_kernel);
+	__dma_remap(page, size, PAGE_KERNEL);
 	dma_release_from_contiguous(dev, page, size >> PAGE_SHIFT);
 }
 
@@ -623,7 +623,7 @@ static void *__dma_alloc(struct device *dev, size_t size, dma_addr_t *handle,
 void *arm_dma_alloc(struct device *dev, size_t size, dma_addr_t *handle,
 		    gfp_t gfp, struct dma_attrs *attrs)
 {
-	pgprot_t prot = __get_dma_pgprot(attrs, pgprot_kernel);
+	pgprot_t prot = __get_dma_pgprot(attrs, PAGE_KERNEL);
 	void *memory;
 
 	if (dma_alloc_from_coherent(dev, size, handle, &memory))
@@ -1175,7 +1175,7 @@ static void __iommu_free_atomic(struct device *dev, struct page **pages,
 static void *arm_iommu_alloc_attrs(struct device *dev, size_t size,
 	    dma_addr_t *handle, gfp_t gfp, struct dma_attrs *attrs)
 {
-	pgprot_t prot = __get_dma_pgprot(attrs, pgprot_kernel);
+	pgprot_t prot = __get_dma_pgprot(attrs, PAGE_KERNEL);
 	struct page **pages;
 	void *addr = NULL;
 
