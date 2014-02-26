@@ -8,6 +8,7 @@
 #include <asm/thread_info.h>
 #include <asm/memory.h>
 #include <asm/page.h>
+#include <asm/pgtable.h>
 	
 #define PROC_INFO							\
 	. = ALIGN(4);							\
@@ -90,6 +91,9 @@ SECTIONS
 		_text = .;
 		HEAD_TEXT
 	}
+
+	. = ALIGN(1<<SECTION_SHIFT);
+
 	.text : {			/* Real text segment		*/
 		_stext = .;		/* Text and read-only data	*/
 			__exception_text_start = .;
@@ -112,6 +116,8 @@ SECTIONS
 			ARM_CPU_KEEP(PROC_INFO)
 	}
 
+	_etext = .;			/* End of text section */
+
 	RO_DATA(PAGE_SIZE)
 
 #ifdef CONFIG_ARM_UNWIND
@@ -131,7 +137,7 @@ SECTIONS
 	}
 #endif
 
-	_etext = .;			/* End of text and rodata section */
+	. = ALIGN(1<<SECTION_SHIFT);
 
 #ifndef CONFIG_XIP_KERNEL
 	. = ALIGN(PAGE_SIZE);
@@ -190,6 +196,9 @@ SECTIONS
 	. = PAGE_OFFSET + TEXT_OFFSET;
 #else
 	__init_end = .;
+
+	. = ALIGN(1<<SECTION_SHIFT);
+
 	. = ALIGN(THREAD_SIZE);
 	__data_loc = .;
 #endif
