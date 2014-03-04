@@ -375,6 +375,8 @@ static int __init ramoops_probe(struct platform_device *pdev)
 		goto fail0;
 	}
 
+	pr_info("pstore probed successfully\n");
+
 	return 0;
 
 fail0:
@@ -391,6 +393,7 @@ fail3:
 fail4:
 	cxt->pstore.bufsize = 0;
 fail5:
+	pr_info("pstore probed failed\n");
 	return err;
 }
 
@@ -427,6 +430,7 @@ MODULE_DEVICE_TABLE(of, ramoops_of_match);
 #endif
 
 static struct platform_driver ramoops_driver = {
+	.probe		= ramoops_probe,
 	.remove		= __exit_p(ramoops_remove),
 	.driver		= {
 		.name	= "ramoops",
@@ -437,7 +441,7 @@ static struct platform_driver ramoops_driver = {
 
 static int __init ramoops_init(void)
 {
-	return platform_driver_probe(&ramoops_driver, ramoops_probe);
+	return platform_driver_register(&ramoops_driver);
 }
 
 static void __exit ramoops_exit(void)
