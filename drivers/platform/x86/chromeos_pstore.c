@@ -21,18 +21,8 @@ static struct dmi_system_id chromeos_pstore_dmi_table[] __initdata = {
 		 * combination are known to date.
 		 */
 		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "GOOGLE"),
 			DMI_MATCH(DMI_BIOS_VENDOR, "coreboot"),
-		},
-	},
-	{
-		/*
-		 * The first Samsung Chromebox and Chromebook Series 5 550 use
-		 * coreboot but with Samsung as the system vendor.
-		 */
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "SAMSUNG"),
-			DMI_MATCH(DMI_BIOS_VENDOR, "coreboot"),
+			DMI_MATCH(DMI_BIOS_VERSION, "Google_"),
 		},
 	},
 	{
@@ -68,7 +58,7 @@ MODULE_DEVICE_TABLE(dmi, chromeos_pstore_dmi_table);
 static struct ramoops_platform_data chromeos_ramoops_data = {
 	.mem_size	= 0x100000,
 	.mem_address	= 0xf00000,
-	.record_size	= 0x20000,
+	.record_size	= 0x40000,
 	.dump_oops	= 1,
 };
 
