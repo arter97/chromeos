@@ -152,7 +152,7 @@ static bool dapm_dirty_widget(struct snd_soc_dapm_widget *w)
 	return !list_empty(&w->dirty);
 }
 
-void dapm_mark_dirty(struct snd_soc_dapm_widget *w, const char *reason)
+static void dapm_mark_dirty(struct snd_soc_dapm_widget *w, const char *reason)
 {
 	dapm_assert_locked(w->dapm);
 
@@ -162,7 +162,6 @@ void dapm_mark_dirty(struct snd_soc_dapm_widget *w, const char *reason)
 		list_add_tail(&w->dirty, &w->dapm->card->dapm_dirty);
 	}
 }
-EXPORT_SYMBOL_GPL(dapm_mark_dirty);
 
 void dapm_mark_io_dirty(struct snd_soc_dapm_context *dapm)
 {
