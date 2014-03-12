@@ -3923,15 +3923,10 @@ static void snd_soc_unregister_dais(struct snd_soc_component *component)
 {
 	struct snd_soc_dai *dai, *_dai;
 
-	mutex_lock(&client_mutex);
-	list_for_each_entry_safe(dai, _dai, &dai_list, list) {
-		if (dai->dev != component->dev)
-			continue;
-
-		list_del(&dai->list);
-
+	list_for_each_entry_safe(dai, _dai, &component->dai_list, list) {
 		dev_dbg(component->dev, "ASoC: Unregistered DAI '%s'\n",
 			dai->name);
+		list_del(&dai->list);
 		kfree(dai->name);
 		kfree(dai);
 	}
