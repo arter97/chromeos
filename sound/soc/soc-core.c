@@ -1246,7 +1246,7 @@ static int soc_post_component_init(struct snd_soc_card *card,
 	struct snd_soc_dai_link *dai_link = NULL;
 	struct snd_soc_aux_dev *aux_dev = NULL;
 	struct snd_soc_pcm_runtime *rtd;
-	const char *temp, *name;
+	const char *name;
 	int ret = 0;
 
 	if (!dailess) {
@@ -1260,10 +1260,6 @@ static int soc_post_component_init(struct snd_soc_card *card,
 	}
 	rtd->card = card;
 
-	/* machine controls, routes and widgets are not prefixed */
-	temp = codec->name_prefix;
-	codec->name_prefix = NULL;
-
 	/* do machine specific initialization */
 	if (!dailess && dai_link->init)
 		ret = dai_link->init(rtd);
@@ -1273,7 +1269,6 @@ static int soc_post_component_init(struct snd_soc_card *card,
 		dev_err(card->dev, "ASoC: failed to init %s: %d\n", name, ret);
 		return ret;
 	}
-	codec->name_prefix = temp;
 
 	/* register the rtd device */
 	rtd->codec = codec;
