@@ -762,6 +762,7 @@ struct snd_soc_platform_driver {
 	int (*remove)(struct snd_soc_platform *);
 	int (*suspend)(struct snd_soc_dai *dai);
 	int (*resume)(struct snd_soc_dai *dai);
+	struct snd_soc_component_driver component_driver;
 
 	/* pcm creation and destruction */
 	int (*pcm_new)(struct snd_soc_pcm_runtime *);
@@ -814,6 +815,8 @@ struct snd_soc_platform {
 	struct snd_soc_card *card;
 	struct list_head list;
 	struct list_head card_list;
+
+	struct snd_soc_component component;
 
 	struct snd_soc_dapm_context dapm;
 
@@ -1078,6 +1081,32 @@ struct soc_enum {
 	const char * const *texts;
 	const unsigned int *values;
 };
+
+/**
+ * snd_soc_component_to_codec() - Casts a component to the CODEC it is embedded in
+ * @component: The component to cast to a CODEC
+ *
+ * This function must only be used on components that are known to be CODECs.
+ * Otherwise the behavior is undefined.
+ */
+static inline struct snd_soc_codec *snd_soc_component_to_codec(
+	struct snd_soc_component *component)
+{
+	return container_of(component, struct snd_soc_codec, component);
+}
+
+/**
+ * snd_soc_component_to_platform() - Casts a component to the platform it is embedded in
+ * @component: The component to cast to a platform
+ *
+ * This function must only be used on components that are known to be platforms.
+ * Otherwise the behavior is undefined.
+ */
+static inline struct snd_soc_platform *snd_soc_component_to_platform(
+	struct snd_soc_component *component)
+{
+	return container_of(component, struct snd_soc_platform, component);
+}
 
 /* codec IO */
 unsigned int snd_soc_read(struct snd_soc_codec *codec, unsigned int reg);
