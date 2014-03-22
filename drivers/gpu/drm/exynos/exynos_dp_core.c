@@ -180,6 +180,10 @@ static int exynos_dp_read_edid(struct exynos_dp_device *dp)
 	}
 
 	dev_err(dp->dev, "EDID Read success!\n");
+
+	dev_info(dp->dev, "LCD panel:%02x%02x%02x%02x\n",
+		edid[8], edid[9], edid[10], edid[11]);
+
 	return 0;
 }
 
