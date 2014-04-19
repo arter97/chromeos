@@ -1094,8 +1094,8 @@ struct soc_enum {
 
 /* codec IO */
 unsigned int snd_soc_read(struct snd_soc_codec *codec, unsigned int reg);
-unsigned int snd_soc_write(struct snd_soc_codec *codec,
-			   unsigned int reg, unsigned int val);
+int snd_soc_write(struct snd_soc_codec *codec, unsigned int reg,
+	unsigned int val);
 
 /* device driver data */
 
