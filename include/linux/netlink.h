@@ -268,4 +268,10 @@ extern void netlink_set_nonroot(int protocol, unsigned flag);
 
 #endif /* __KERNEL__ */
 
+bool __netlink_ns_capable(const struct netlink_skb_parms *nsp,
+			  struct user_namespace *ns, int cap);
+bool netlink_ns_capable(const struct sk_buff *skb,
+			struct user_namespace *ns, int cap);
+bool netlink_capable(const struct sk_buff *skb, int cap);
+
 #endif	/* __LINUX_NETLINK_H */
