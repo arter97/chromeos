@@ -514,7 +514,6 @@ static irqreturn_t ivybridge_irq_handler(DRM_IRQ_ARGS)
 	if (pm_iir & GEN6_PM_DEFERRED_EVENTS) {
 		unsigned long flags;
 		spin_lock_irqsave(&dev_priv->rps_lock, flags);
-		WARN(dev_priv->pm_iir & pm_iir, "Missed a PM interrupt\n");
 		dev_priv->pm_iir |= pm_iir;
 		I915_WRITE(GEN6_PMIMR, dev_priv->pm_iir);
 		POSTING_READ(GEN6_PMIMR);
@@ -628,7 +627,6 @@ static irqreturn_t ironlake_irq_handler(DRM_IRQ_ARGS)
 		 */
 		unsigned long flags;
 		spin_lock_irqsave(&dev_priv->rps_lock, flags);
-		WARN(dev_priv->pm_iir & pm_iir, "Missed a PM interrupt\n");
 		dev_priv->pm_iir |= pm_iir;
 		I915_WRITE(GEN6_PMIMR, dev_priv->pm_iir);
 		POSTING_READ(GEN6_PMIMR);
