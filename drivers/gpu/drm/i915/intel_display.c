@@ -8157,21 +8157,33 @@ void ironlake_disable_drps(struct drm_device *dev)
 
 }
 
-void gen6_set_rps(struct drm_device *dev, u8 val)
+static u32 gen6_rps_limits(struct drm_i915_private *dev_priv, u8 val)
 {
-	struct drm_i915_private *dev_priv = dev->dev_private;
 	u32 limits;
 
 	limits = 0;
 	if (val >= dev_priv->max_delay)
 		val = dev_priv->max_delay;
-	else
-		limits |= dev_priv->max_delay << 24;
+	limits |= dev_priv->max_delay << 24;
 
-	if (val <= dev_priv->min_delay)
+	/* Only set the down limit when we've reached the lowest level to avoid
+	 * getting more interrupts, otherwise leave this clear. This prevents a
+	 * race in the hw when coming out of rc6: There's a tiny window where
+	 * the hw runs at the minimal clock before selecting the desired
+	 * frequency, if the down threshold expires in that window we will not
+	 * receive a down interrupt. */
+	if (val <= dev_priv->min_delay) {
 		val = dev_priv->min_delay;
-	else
 		limits |= dev_priv->min_delay << 16;
+	}
+
+	return limits;
+}
+
+void gen6_set_rps(struct drm_device *dev, u8 val)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	u32 limits = gen6_rps_limits(dev_priv, val);
 
 	if (val == dev_priv->cur_delay)
 		return;
