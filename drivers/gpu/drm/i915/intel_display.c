@@ -8160,10 +8160,33 @@ void ironlake_disable_drps(struct drm_device *dev)
 void gen6_set_rps(struct drm_device *dev, u8 val)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
-	u32 swreq;
+	u32 limits;
 
-	swreq = (val & 0x3ff) << 25;
-	I915_WRITE(GEN6_RPNSWREQ, swreq);
+	limits = 0;
+	if (val >= dev_priv->max_delay)
+		val = dev_priv->max_delay;
+	else
+		limits |= dev_priv->max_delay << 24;
+
+	if (val <= dev_priv->min_delay)
+		val = dev_priv->min_delay;
+	else
+		limits |= dev_priv->min_delay << 16;
+
+	if (val == dev_priv->cur_delay)
+		return;
+
+	I915_WRITE(GEN6_RPNSWREQ,
+		   GEN6_FREQUENCY(val) |
+		   GEN6_OFFSET(0) |
+		   GEN6_AGGRESSIVE_TURBO);
+
+	/* Make sure we continue to get interrupts
+	 * until we hit the minimum or maximum frequencies.
+	 */
+	I915_WRITE(GEN6_RP_INTERRUPT_LIMITS, limits);
+
+	dev_priv->cur_delay = val;
 }
 
 void gen6_disable_rps(struct drm_device *dev)
@@ -8298,8 +8321,8 @@ static int intel_enable_rc6(struct drm_device *dev)
 
 void gen6_enable_rps(struct drm_i915_private *dev_priv)
 {
-	u32 rp_state_cap = I915_READ(GEN6_RP_STATE_CAP);
-	u32 gt_perf_status = I915_READ(GEN6_GT_PERF_STATUS);
+	u32 rp_state_cap;
+	u32 gt_perf_status;
 	u32 pcu_mbox, rc6_mask = 0;
 	u32 gtfifodbg;
 	u8 cur_delay, min_delay, max_delay;
@@ -8322,6 +8345,14 @@ void gen6_enable_rps(struct drm_i915_private *dev_priv)
 	}
 
 	gen6_gt_force_wake_get(dev_priv);
+
+	rp_state_cap = I915_READ(GEN6_RP_STATE_CAP);
+	gt_perf_status = I915_READ(GEN6_GT_PERF_STATUS);
+
+	/* In units of 100MHz */
+	dev_priv->max_delay = rp_state_cap & 0xff;
+	dev_priv->min_delay = (rp_state_cap & 0xff0000) >> 16;
+	dev_priv->cur_delay = 0;
 
 	/* disable the counters and set deterministic thresholds */
 	I915_WRITE(GEN6_RC_CONTROL, 0);
@@ -8363,8 +8394,8 @@ void gen6_enable_rps(struct drm_i915_private *dev_priv)
 
 	I915_WRITE(GEN6_RP_DOWN_TIMEOUT, 1000000);
 	I915_WRITE(GEN6_RP_INTERRUPT_LIMITS,
-		   18 << 24 |
-		   6 << 16);
+		   dev_priv->max_delay << 24 |
+		   dev_priv->min_delay << 16);
 	/*
 	 * These thresholds found through experimentation. Making them
 	 * symmetric will prevent holding the clock high when the workload is
@@ -8410,14 +8441,9 @@ void gen6_enable_rps(struct drm_i915_private *dev_priv)
 		     500))
 		DRM_ERROR("timeout waiting for pcode mailbox to finish\n");
 	if (pcu_mbox & (1<<31)) { /* OC supported */
-		max_delay = pcu_mbox & 0xff;
+		dev_priv->max_delay = pcu_mbox & 0xff;
 		DRM_DEBUG_DRIVER("overclocking supported, adjusting frequency max to %dMHz\n", pcu_mbox * 50);
 	}
-
-	/* In units of 100MHz */
-	dev_priv->min_delay = max(min_delay, dev_priv->min_delay);
-	dev_priv->max_delay = max_delay;
-	dev_priv->cur_delay = max(dev_priv->min_delay, (u8)10);
 
 	I915_WRITE(GEN6_RPNSWREQ,
 		   GEN6_FREQUENCY(dev_priv->cur_delay) |
@@ -8425,6 +8451,8 @@ void gen6_enable_rps(struct drm_i915_private *dev_priv)
 		   GEN6_AGGRESSIVE_TURBO);
 	I915_WRITE(GEN6_RC_VIDEO_FREQ,
 		   GEN6_FREQUENCY(12));
+
+	gen6_set_rps(dev_priv->dev, (gt_perf_status & 0xff00) >> 8);
 
 	/* requires MSI enabled */
 	I915_WRITE(GEN6_PMIER, GEN6_PM_DEFERRED_EVENTS);
