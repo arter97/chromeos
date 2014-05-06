@@ -25,8 +25,22 @@ snd-soc-sst-haswell-objs := haswell.o
 snd-soc-sst-byt-rt5640-mach-objs := byt-rt5640.o
 snd-soc-sst-broadwell-objs := broadwell.o
 snd-soc-sst-byt-max98090-mach-objs := byt-max98090.o
+snd-soc-sst-broadwell-objs := broadwell.o
 
 obj-$(CONFIG_SND_SOC_INTEL_HASWELL_MACH) += snd-soc-sst-haswell.o
 obj-$(CONFIG_SND_SOC_INTEL_BYT_RT5640_MACH) += snd-soc-sst-byt-rt5640-mach.o
 obj-$(CONFIG_SND_SOC_INTEL_BROADWELL_MACH) += snd-soc-sst-broadwell.o
 obj-$(CONFIG_SND_SOC_INTEL_BYT_MAX98090_MACH) += snd-soc-sst-byt-max98090-mach.o
+obj-$(CONFIG_SND_SOC_INTEL_BROADWELL_MACH) += snd-soc-sst-broadwell.o
+
+# SST Platform Driver
+PLATFORM_LIBS = platform-libs/controls_v2_dpcm.o
+
+snd-soc-sst-platform-objs := pcm.o compress.o $(PLATFORM_LIBS)
+obj-$(CONFIG_SND_SST_PLATFORM) += snd-soc-sst-platform.o
+
+# Relevant Machine driver
+obj-$(CONFIG_SND_SST_MACHINE) += board/
+
+# IPC driver
+obj-$(CONFIG_SND_INTEL_SST) += sst/
