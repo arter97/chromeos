@@ -314,4 +314,7 @@ struct sst_mem_block *sst_mem_block_register(struct sst_dsp *dsp, u32 offset,
 	void *private);
 void sst_mem_block_unregister_all(struct sst_dsp *dsp);
 
+/* Create/Free DMA resources */
+int sst_dma_new(struct sst_dsp *sst);
+void sst_dma_free(struct sst_dma *dma);
 #endif
