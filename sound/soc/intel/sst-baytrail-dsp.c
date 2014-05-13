@@ -361,7 +361,7 @@ static int sst_byt_init(struct sst_dsp *sst, struct sst_pdata *pdata)
 
 	sst_byt_d0(sst);
 
-	ret = dma_coerce_mask_and_coherent(dev, DMA_BIT_MASK(32));
+	ret = dma_coerce_mask_and_coherent(sst->dma_dev, DMA_BIT_MASK(32));
 	if (ret)
 		return ret;
 
