@@ -876,7 +876,7 @@ int sst_byt_dsp_init(struct device *dev, struct sst_pdata *pdata)
 	byt->dsp = sst_dsp_new(dev, &byt_dev, pdata);
 	if (byt->dsp == NULL) {
 		err = -ENODEV;
-		goto thread_err;
+		goto dsp_err;
 	}
 
 	/* keep the DSP in reset state for base FW loading */
@@ -909,7 +909,9 @@ boot_err:
 	sst_fw_free(byt_sst_fw);
 fw_err:
 	sst_dsp_free(byt->dsp);
-thread_err:
+dsp_err:
+	kthread_stop(byt->tx_thread);
+err_free_msg:
 	kfree(byt->msg);
 	return err;
 }
@@ -922,6 +924,7 @@ void sst_byt_dsp_free(struct device *dev, struct sst_pdata *pdata)
 	sst_dsp_reset(byt->dsp);
 	sst_fw_free_all(byt->dsp);
 	sst_dsp_free(byt->dsp);
+	kthread_stop(byt->tx_thread);
 	kfree(byt->msg);
 }
 EXPORT_SYMBOL_GPL(sst_byt_dsp_free);
