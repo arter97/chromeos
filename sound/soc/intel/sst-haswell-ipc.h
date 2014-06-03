@@ -488,4 +488,8 @@ struct sst_dsp *sst_hsw_get_dsp(struct sst_hsw *hsw);
 void sst_hsw_set_scratch_module(struct sst_hsw *hsw,
 	struct sst_module *scratch);
 
+/* PM */
+int sst_hsw_dsp_runtime_resume(struct sst_hsw *hsw);
+int sst_hsw_dsp_runtime_suspend(struct sst_hsw *hsw);
+
 #endif

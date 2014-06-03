@@ -30,6 +30,7 @@
 #include <linux/firmware.h>
 #include <linux/dma-mapping.h>
 #include <linux/debugfs.h>
+#include <linux/pm_runtime.h>
 
 #include "sst-haswell-ipc.h"
 #include "sst-dsp.h"
@@ -299,10 +300,6 @@ struct sst_hsw {
 	struct sst_hsw_ipc_dx_reply dx;
 	void *dx_context;
 	dma_addr_t dx_context_paddr;
-	int dx_state;
-	int cnt_state_idle;
-	int cnt_state_d0;
-	int cnt_state_d3;
 
 	/* boot */
 	wait_queue_head_t boot_wait;
@@ -1680,7 +1677,6 @@ static int sst_hsw_dx_state_dump(struct sst_hsw *hsw)
 
 	trace_ipc_request("PM state dump. Items #", SST_HSW_MAX_DX_REGIONS);
 
-	sst_hsw_dx_set_state(hsw, SST_HSW_DX_STATE_D3, &hsw->dx);
 	if (hsw->dx.entries_no > SST_HSW_MAX_DX_REGIONS) {
 		dev_err(hsw->dev,
 			"error: number of FW context regions greater than %d\n",
@@ -1689,11 +1685,11 @@ static int sst_hsw_dx_state_dump(struct sst_hsw *hsw)
 		return -EINVAL;
 	}
 
-//	ret = sst_dsp_dma_get_channel(sst, 0, 3);
-//	if (ret < 0) {
-//		dev_err(hsw->dev, "error: cant allocate dma channel %d\n", ret);
-//		return ret;
-//	}
+	ret = sst_dsp_dma_get_channel(sst, 0);
+	if (ret < 0) {
+		dev_err(hsw->dev, "error: cant allocate dma channel %d\n", ret);
+		return ret;
+	}
 
 	/* set on-demond mode on engine 0 channel 3 */
 	sst_dsp_shim_update_bits(sst, SST_HMDC,
@@ -1710,10 +1706,11 @@ static int sst_hsw_dx_state_dump(struct sst_hsw *hsw)
 					- DSP_DRAM_ADDR_OFFSET;
 			size = (hsw->dx.mem_info[item].size + 3) & (~3);
 
-//			ret = sst_dsp_dma_copyfrom(sst, hsw->dx_context_paddr + offset,
-//				sst->addr.lpe_base + offset, size); //	sst->addr.dram_base
+			ret = sst_dsp_dma_copyfrom(sst, hsw->dx_context_paddr + offset,
+				sst->addr.lpe_base + offset, size);
 			if (ret < 0) {
-				dev_err(hsw->dev, "FW context dump failed\n");
+				dev_err(hsw->dev,
+					"error: FW context dump failed\n");
 				memset(&hsw->dx, sizeof(hsw->dx), 0);
 				goto out;
 			}
@@ -1721,7 +1718,7 @@ static int sst_hsw_dx_state_dump(struct sst_hsw *hsw)
 	}
 
 out:
-//	sst_dsp_dma_put_channel(sst);
+	sst_dsp_dma_put_channel(sst);
 	return ret;
 }
 
@@ -1731,11 +1728,11 @@ static int sst_hsw_dx_state_restore(struct sst_hsw *hsw)
 	u32 item, offset, size;
 	int ret = 0;
 
-	//ret = sst_dsp_dma_get_channel(sst, 0, 3);
-	//if (ret < 0) {
-	//	dev_err(hsw->dev, "error: cant allocate dma channel %d\n", ret);
-	//	return ret;
-	//}
+	ret = sst_dsp_dma_get_channel(sst, 0);
+	if (ret < 0) {
+		dev_err(hsw->dev, "error: cant allocate dma channel %d\n", ret);
+		return ret;
+	}
 
 	for (item = 0; item < hsw->dx.entries_no; item++) {
 		if (hsw->dx.mem_info[item].source == SST_HSW_DX_TYPE_MEMORY_DUMP
@@ -1746,31 +1743,149 @@ static int sst_hsw_dx_state_restore(struct sst_hsw *hsw)
 			offset = hsw->dx.mem_info[item].offset
 					- DSP_DRAM_ADDR_OFFSET;
 			size = (hsw->dx.mem_info[item].size + 3) & (~3);
-			//ret = sst->transport->ops.copy(sst->transport,
-			//	sst->addr.dram + offset,
-			//	sst->addr.dram_base + offset,
-			//	hsw->dx_context + offset,
-			//	size);
-			//ret = sst_dsp_dma_copyto(sst, sst->addr.lpe_base + offset,
-			//	hsw->dx_context_paddr + offset, size); //	sst->addr.dram_base
+
+			ret = sst_dsp_dma_copyto(sst, sst->addr.lpe_base + offset,
+				hsw->dx_context_paddr + offset, size);
 			if (ret < 0) {
 				dev_err(hsw->dev,
-					"FW context restore failed\n");
+					"error: FW context restore failed\n");
 				goto out;
 			}
 		}
 	}
 
 out:
-//	sst_dsp_dma_put_channel(sst);
+	sst_dsp_dma_put_channel(sst);
 	return ret;
 }
 
 #endif
 
+static void sst_hsw_drop_all(struct sst_hsw *hsw)
+{
+	struct ipc_message *msg, *tmp;
+	unsigned long flags;
+	int tx_drop_cnt = 0, rx_drop_cnt = 0;
+
+	/* drop all TX and Rx messages before we stall + reset DSP */
+	spin_lock_irqsave(&hsw->dsp->spinlock, flags);
+
+	list_for_each_entry_safe(msg, tmp, &hsw->tx_list, list) {
+		list_move(&msg->list, &hsw->empty_list);
+		tx_drop_cnt++;
+	}
+
+	list_for_each_entry_safe(msg, tmp, &hsw->rx_list, list) {
+		list_move(&msg->list, &hsw->empty_list);
+		rx_drop_cnt++;
+	}
+
+	spin_unlock_irqrestore(&hsw->dsp->spinlock, flags);
+
+	if (tx_drop_cnt || rx_drop_cnt)
+		dev_err(hsw->dev, "dropped IPC msg RX=%d, TX=%d\n",
+			tx_drop_cnt, rx_drop_cnt);
+}
+
+static int sst_hsw_dsp_boot(struct sst_hsw *hsw)
+{
+	struct sst_dsp *dsp = hsw->dsp;
+	int ret = 0;
+
+	dev_dbg(hsw->dev, "booting audio DSP....");
+
+	ret = sst_dsp_wake(dsp);
+	if (ret < 0) {
+		dev_err(hsw->dev, "error: failed to wake audio DSP\n");
+		return -ENODEV;
+	}
+
+	ret = sst_dsp_dma_get_channel(dsp, 0);
+	if (ret < 0) {
+		dev_err(hsw->dev, "error: cant allocate dma channel %d\n", ret);
+		return ret;
+	}
+
+	ret = sst_fw_reload(hsw->sst_fw);
+	if (ret < 0) {
+		dev_err(hsw->dev, "error: SST FW reload failed\n");
+		sst_dsp_dma_put_channel(dsp);
+		return -ENOMEM;
+	}
+	sst_dsp_dma_put_channel(dsp);
+
+	ret = sst_hsw_dx_state_restore(hsw);
+	if (ret < 0) {
+		dev_err(hsw->dev, "error: SST FW context restore failed\n");
+		return -ENOMEM;
+	}
+
+	/* wait for DSP boot completion */
+	sst_dsp_boot(dsp);
+
+	return ret;
+}
+
+#ifdef CONFIG_PM_RUNTIME
+
+int sst_hsw_dsp_runtime_suspend(struct sst_hsw *hsw)
+{
+	int ret;
+
+	dev_dbg(hsw->dev, "audio dsp runtime suspend\n");
+
+	ret = sst_hsw_dx_set_state(hsw, SST_HSW_DX_STATE_D3, &hsw->dx);
+	if (ret < 0)
+		return ret;
+
+	sst_dsp_stall(hsw->dsp);
+
+	ret = sst_hsw_dx_state_dump(hsw);
+	if (ret < 0)
+		return ret;
+
+	sst_hsw_drop_all(hsw);
+
+	sst_fw_unload(hsw->sst_fw);
+
+	hsw->boot_complete = false;
+
+	sst_dsp_sleep(hsw->dsp);
 
 	return 0;
 }
+
+int sst_hsw_dsp_runtime_resume(struct sst_hsw *hsw)
+{
+	struct device *dev = hsw->dev;
+	int ret;
+
+	dev_dbg(dev, "audio dsp runtime resume\n");
+
+	if (hsw->boot_complete)
+		return 0;
+
+	ret = sst_hsw_dsp_boot(hsw);
+	if (ret < 0)
+		dev_err(dev, "error: audio DSP boot failure\n");
+
+	ret = wait_event_timeout(hsw->boot_wait, hsw->boot_complete,
+		msecs_to_jiffies(IPC_BOOT_MSECS));
+	if (ret == 0) {
+		dev_err(hsw->dev, "error: audio DSP boot timeout\n");
+		return -EIO;
+	}
+
+	/* Set ADSP SSP port settings */
+	ret = sst_hsw_device_set_config(hsw, SST_HSW_DEVICE_SSP_0,
+					SST_HSW_DEVICE_MCLK_FREQ_24_MHZ,
+					SST_HSW_DEVICE_CLOCK_MASTER, 9);
+	if (ret < 0)
+		dev_err(dev, "error: SSP re-initialization failed\n");
+
+	return ret;
+}
+#endif
 
 static int msg_empty_list_init(struct sst_hsw *hsw)
 {
