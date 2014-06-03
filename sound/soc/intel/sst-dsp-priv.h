@@ -26,6 +26,9 @@ struct sst_mem_block;
 struct sst_module;
 struct sst_fw;
 
+/* do we need to remove or keep */
+#define DSP_DRAM_ADDR_OFFSET		0x400000
+
 /*
  * DSP Operations exported by platform Audio DSP driver.
  */

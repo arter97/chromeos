@@ -176,6 +176,13 @@ enum ipc_debug_operation {
 	IPC_DEBUG_MAX_DEBUG_LOG
 };
 
+enum dx_state {
+	HSW_STATE_D0 = 0,
+	HSW_STATE_IDLE = 1,
+	HSW_STATE_D3 = 3,
+	HSW_STATE_UNKNOWN,
+};
+
 /* Firmware Ready */
 struct sst_hsw_ipc_fw_ready {
 	u32 inbox_offset;
@@ -276,6 +283,7 @@ struct sst_hsw {
 	struct sst_hsw_ipc_fw_version version;
 	struct sst_module *scratch;
 	bool fw_done;
+	struct sst_fw *sst_fw;
 
 	/* stream */
 	struct list_head stream_list;
@@ -289,6 +297,12 @@ struct sst_hsw {
 
 	/* DX */
 	struct sst_hsw_ipc_dx_reply dx;
+	void *dx_context;
+	dma_addr_t dx_context_paddr;
+	int dx_state;
+	int cnt_state_idle;
+	int cnt_state_d0;
+	int cnt_state_d3;
 
 	/* boot */
 	wait_queue_head_t boot_wait;
@@ -1654,30 +1668,106 @@ int sst_hsw_dx_set_state(struct sst_hsw *hsw,
 	dev_dbg(hsw->dev, "ipc: got %d entry numbers for state %d\n",
 		dx->entries_no, state);
 
-	memcpy(&hsw->dx, dx, sizeof(*dx));
-	return 0;
+	return ret;
 }
 
-/* Used to save state into hsw->dx_reply */
-int sst_hsw_dx_get_state(struct sst_hsw *hsw, u32 item,
-	u32 *offset, u32 *size, u32 *source)
+#ifdef CONFIG_PM
+static int sst_hsw_dx_state_dump(struct sst_hsw *hsw)
 {
-	struct sst_hsw_ipc_dx_memory_item *dx_mem;
-	struct sst_hsw_ipc_dx_reply *dx_reply;
-	int entry_no;
+	struct sst_dsp *sst = hsw->dsp;
+	u32 item, offset, size;
+	int ret = 0;
 
-	dx_reply = &hsw->dx;
-	entry_no = dx_reply->entries_no;
+	trace_ipc_request("PM state dump. Items #", SST_HSW_MAX_DX_REGIONS);
 
-	trace_ipc_request("PM get Dx state", entry_no);
-
-	if (item >= entry_no)
+	sst_hsw_dx_set_state(hsw, SST_HSW_DX_STATE_D3, &hsw->dx);
+	if (hsw->dx.entries_no > SST_HSW_MAX_DX_REGIONS) {
+		dev_err(hsw->dev,
+			"error: number of FW context regions greater than %d\n",
+			SST_HSW_MAX_DX_REGIONS);
+		memset(&hsw->dx, sizeof(hsw->dx), 0);
 		return -EINVAL;
+	}
 
-	dx_mem = &dx_reply->mem_info[item];
-	*offset = dx_mem->offset;
-	*size = dx_mem->size;
-	*source = dx_mem->source;
+//	ret = sst_dsp_dma_get_channel(sst, 0, 3);
+//	if (ret < 0) {
+//		dev_err(hsw->dev, "error: cant allocate dma channel %d\n", ret);
+//		return ret;
+//	}
+
+	/* set on-demond mode on engine 0 channel 3 */
+	sst_dsp_shim_update_bits(sst, SST_HMDC,
+			SST_HMDC_HDDA_E0_ALLCH | SST_HMDC_HDDA_E1_ALLCH,
+			SST_HMDC_HDDA_E0_ALLCH | SST_HMDC_HDDA_E1_ALLCH);
+
+	for (item = 0; item < hsw->dx.entries_no; item++) {
+		if (hsw->dx.mem_info[item].source == SST_HSW_DX_TYPE_MEMORY_DUMP
+			&& hsw->dx.mem_info[item].offset > DSP_DRAM_ADDR_OFFSET
+			&& hsw->dx.mem_info[item].offset <
+			DSP_DRAM_ADDR_OFFSET + SST_HSW_DX_CONTEXT_SIZE) {
+
+			offset = hsw->dx.mem_info[item].offset
+					- DSP_DRAM_ADDR_OFFSET;
+			size = (hsw->dx.mem_info[item].size + 3) & (~3);
+
+//			ret = sst_dsp_dma_copyfrom(sst, hsw->dx_context_paddr + offset,
+//				sst->addr.lpe_base + offset, size); //	sst->addr.dram_base
+			if (ret < 0) {
+				dev_err(hsw->dev, "FW context dump failed\n");
+				memset(&hsw->dx, sizeof(hsw->dx), 0);
+				goto out;
+			}
+		}
+	}
+
+out:
+//	sst_dsp_dma_put_channel(sst);
+	return ret;
+}
+
+static int sst_hsw_dx_state_restore(struct sst_hsw *hsw)
+{
+	struct sst_dsp *sst = hsw->dsp;
+	u32 item, offset, size;
+	int ret = 0;
+
+	//ret = sst_dsp_dma_get_channel(sst, 0, 3);
+	//if (ret < 0) {
+	//	dev_err(hsw->dev, "error: cant allocate dma channel %d\n", ret);
+	//	return ret;
+	//}
+
+	for (item = 0; item < hsw->dx.entries_no; item++) {
+		if (hsw->dx.mem_info[item].source == SST_HSW_DX_TYPE_MEMORY_DUMP
+			&& hsw->dx.mem_info[item].offset > DSP_DRAM_ADDR_OFFSET
+			&& hsw->dx.mem_info[item].offset <
+			DSP_DRAM_ADDR_OFFSET + SST_HSW_DX_CONTEXT_SIZE) {
+
+			offset = hsw->dx.mem_info[item].offset
+					- DSP_DRAM_ADDR_OFFSET;
+			size = (hsw->dx.mem_info[item].size + 3) & (~3);
+			//ret = sst->transport->ops.copy(sst->transport,
+			//	sst->addr.dram + offset,
+			//	sst->addr.dram_base + offset,
+			//	hsw->dx_context + offset,
+			//	size);
+			//ret = sst_dsp_dma_copyto(sst, sst->addr.lpe_base + offset,
+			//	hsw->dx_context_paddr + offset, size); //	sst->addr.dram_base
+			if (ret < 0) {
+				dev_err(hsw->dev,
+					"FW context restore failed\n");
+				goto out;
+			}
+		}
+	}
+
+out:
+//	sst_dsp_dma_put_channel(sst);
+	return ret;
+}
+
+#endif
+
 
 	return 0;
 }
@@ -1719,7 +1809,6 @@ int sst_hsw_dsp_init(struct device *dev, struct sst_pdata *pdata)
 {
 	struct sst_hsw_ipc_fw_version version;
 	struct sst_hsw *hsw;
-	struct sst_fw *hsw_sst_fw;
 	int ret;
 
 	dev_dbg(dev, "initialising Audio DSP IPC\n");
@@ -1761,12 +1850,19 @@ int sst_hsw_dsp_init(struct device *dev, struct sst_pdata *pdata)
 		goto list_err;
 	}
 
+	/* allocate DMA buffer for context storage */
+	hsw->dx_context = dma_alloc_coherent(hsw->dsp->dma_dev,
+		SST_HSW_DX_CONTEXT_SIZE, &hsw->dx_context_paddr, GFP_KERNEL);
+	if (hsw->dx_context == NULL) {
+		ret = -ENOMEM;
+		goto dma_err;
+	}
+
 	/* keep the DSP in reset state for base FW loading */
 	sst_dsp_reset(hsw->dsp);
 
-	hsw_sst_fw = sst_fw_new(hsw->dsp, pdata->fw, hsw);
-
-	if (hsw_sst_fw == NULL) {
+	hsw->sst_fw = sst_fw_new(hsw->dsp, pdata->fw, hsw);
+	if (hsw->sst_fw == NULL) {
 		ret = -ENODEV;
 		dev_err(dev, "error: failed to load firmware\n");
 		goto fw_err;
@@ -1799,8 +1895,11 @@ int sst_hsw_dsp_init(struct device *dev, struct sst_pdata *pdata)
 
 boot_err:
 	sst_dsp_reset(hsw->dsp);
-	sst_fw_free(hsw_sst_fw);
+	sst_fw_free(hsw->sst_fw);
 fw_err:
+	dma_free_coherent(hsw->dsp->dma_dev, SST_HSW_DX_CONTEXT_SIZE,
+			hsw->dx_context, hsw->dx_context_paddr);
+dma_err:
 	sst_dsp_free(hsw->dsp);
 	kfree(hsw->msg);
 list_err:
@@ -1814,6 +1913,8 @@ void sst_hsw_dsp_free(struct device *dev, struct sst_pdata *pdata)
 
 	sst_dsp_reset(hsw->dsp);
 	sst_fw_free_all(hsw->dsp);
+	dma_free_coherent(hsw->dsp->dma_dev, SST_HSW_DX_CONTEXT_SIZE,
+			hsw->dx_context, hsw->dx_context_paddr);
 	sst_dsp_free(hsw->dsp);
 	kfree(hsw->scratch);
 	kfree(hsw->msg);
