@@ -304,6 +304,8 @@ struct sst_module *sst_module_get_from_id(struct sst_dsp *dsp, u32 id);
 struct sst_module *sst_mem_block_alloc_scratch(struct sst_dsp *dsp);
 void sst_mem_block_free_scratch(struct sst_dsp *dsp,
 	struct sst_module *scratch);
+int sst_module_alloc_persistent(struct sst_dsp *dsp, struct sst_module *module);
+void sst_module_free_persistent(struct sst_dsp *dsp, struct sst_module *module);
 int sst_block_module_remove(struct sst_module *module);
 
 /* Register the DSPs memory blocks - would be nice to read from ACPI */

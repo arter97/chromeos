@@ -168,6 +168,11 @@ static int hsw_parse_module(struct sst_dsp *dsp, struct sst_fw *fw,
 
 		block = (void *)block + sizeof(*block) + block->size;
 	}
+
+	/*allocate persistent memory if needed*/
+	if (mod->p.size > 0)
+		return sst_module_alloc_persistent(dsp, mod);
+
 	return 0;
 }
 
@@ -207,7 +212,7 @@ static int hsw_parse_fw_image(struct sst_fw *sst_fw)
 		module = (void *)module + sizeof(*module) + module->mod_size;
 	}
 
-	/* allocate persistent/scratch mem regions */
+	/* allocate scratch mem regions */
 	scratch = sst_mem_block_alloc_scratch(dsp);
 	if (scratch == NULL)
 		return -ENOMEM;

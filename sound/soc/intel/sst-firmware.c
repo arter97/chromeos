@@ -593,6 +593,58 @@ void sst_mem_block_free_scratch(struct sst_dsp *dsp,
 }
 EXPORT_SYMBOL_GPL(sst_mem_block_free_scratch);
 
+/* allocate persistent buffer blocks for given module
+ creates new sst_module to represent persistent memory alocation of requestor.
+*/
+int sst_module_alloc_persistent(struct sst_dsp *dsp, struct sst_module *module)
+{
+	int ret = 0;
+	struct sst_module_data *persistent = &module->p;
+
+	mutex_lock(&dsp->mutex);
+
+	dev_dbg(dsp->dev, "persistent buffer required for mod id %d is %d bytes\n",
+		module->id, persistent->size);
+
+	ret = block_alloc(module, persistent);
+
+	if (ret < 0) {
+		dev_err(dsp->dev, "error: can't alloc persistent blocks for mod id %d\n",
+			module->id);
+		goto out;
+	}
+	dev_dbg(dsp->dev, "module %d persistent area allocated %dB at 0x%x\n",
+		module->id, persistent->size, persistent->offset);
+
+	/* prepare DSP blocks for persistent module usage */
+	ret = block_module_prepare(module);
+	if (ret < 0) {
+		dev_err(dsp->dev, "error: persistent module prepare failed\n");
+		goto out;
+	}
+
+out:
+	mutex_unlock(&dsp->mutex);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(sst_module_alloc_persistent);
+
+void sst_module_free_persistent(struct sst_dsp *dsp, struct sst_module *persistent)
+{
+	struct sst_mem_block *block, *tmp;
+
+	dev_dbg(dsp->dev, "module %d persistent released", persistent->id);
+
+	mutex_lock(&dsp->mutex);
+
+	list_for_each_entry_safe(block, tmp, &persistent->block_list, module_list)
+		list_del(&block->module_list);
+
+	mutex_unlock(&dsp->mutex);
+
+}
+EXPORT_SYMBOL_GPL(sst_module_free_persistent);
+
 /* get a module from it's unique ID */
 struct sst_module *sst_module_get_from_id(struct sst_dsp *dsp, u32 id)
 {
