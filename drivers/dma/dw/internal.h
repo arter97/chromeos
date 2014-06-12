@@ -28,6 +28,9 @@ struct dw_dma_chip {
 	int		irq;
 	void __iomem	*regs;
 	struct dw_dma	*dw;
+
+	struct device	*adsp_dev;
+	u64 adsp_mask;
 };
 
 /* Export to the platform drivers */

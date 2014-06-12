@@ -1480,6 +1480,7 @@ int dw_dma_probe(struct dw_dma_chip *chip, struct dw_dma_platform_data *pdata)
 {
 	struct dw_dma		*dw;
 	size_t			size;
+	struct device		*adsp_dev;
 	bool			autocfg;
 	unsigned int		dw_params;
 	unsigned int		nr_channels;
@@ -1551,7 +1552,9 @@ int dw_dma_probe(struct dw_dma_chip *chip, struct dw_dma_platform_data *pdata)
 		return err;
 
 	/* Create a pool of consistent memory blocks for hardware descriptors */
-	dw->desc_pool = dmam_pool_create("dw_dmac_desc_pool", chip->dev,
+	/* Use the ADSP device when allocating descriptors if we are an ADSP device */
+	adsp_dev = chip->adsp_dev ? chip->adsp_dev : chip->dev;
+	dw->desc_pool = dmam_pool_create("dw_dmac_desc_pool", adsp_dev,
 					 sizeof(struct dw_desc), 4, 0);
 	if (!dw->desc_pool) {
 		dev_err(chip->dev, "No memory for descriptors dma pool\n");

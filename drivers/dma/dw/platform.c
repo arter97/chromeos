@@ -202,6 +202,14 @@ static int dw_probe(struct platform_device *pdev)
 	if (!pdata)
 		pdata = dw_dma_parse_dt(pdev);
 
+	if (pdata) {
+		chip->adsp_dev = pdata->adsp_dev;
+		if (pdata->need_adsp_mask)
+			chip->adsp_mask = pdata->adsp_mask;
+		if (chip->adsp_dev && chip->adsp_mask)
+			dma_coerce_mask_and_coherent(chip->adsp_dev, chip->adsp_mask);
+	}
+
 	chip->dev = dev;
 
 	err = dw_dma_probe(chip, pdata);

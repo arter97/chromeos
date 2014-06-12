@@ -59,6 +59,9 @@ struct dw_dma_platform_data {
 	unsigned short	block_size;
 	unsigned char	nr_masters;
 	unsigned char	data_width[4];
+	struct device	*adsp_dev;
+	bool	need_adsp_mask;
+	u64		adsp_mask;	/*will use it when need_adsp_mask is true.*/
 	struct clk_hw		*hw_clk;
 	struct clk_lookup	*lookup_clk;
 };
