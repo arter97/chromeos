@@ -199,6 +199,9 @@ int sst_dma_new(struct sst_dsp *sst)
 	* is attached to the ADSP IP. */
 	switch (sst->pdata->dma_engine) {
 	case SST_DMA_TYPE_DW:
+		dw_pdata.adsp_dev = sst->dma_dev;
+		dw_pdata.need_adsp_mask = true;
+		dw_pdata.adsp_mask = DMA_BIT_MASK(31);
 		dma_pdata = &dw_pdata;
 		dma_pdata_size = sizeof(dw_pdata);
 		dma_dev_name = "dw_dmac";
