@@ -23,6 +23,9 @@
 #include <linux/acpi.h>
 #include <linux/acpi_dma.h>
 
+#include <linux/clkdev.h>
+#include <linux/clk-provider.h>
+
 #include "internal.h"
 
 struct dw_dma_of_filter_args {
@@ -230,6 +233,133 @@ static int dw_remove(struct platform_device *pdev)
 
 	return dw_dma_remove(chip);
 }
+
+/**
+ * dw_register_dummy_clk - install dummy CLK for Synopsys DMA engine
+ * some platforms (like ADSP) don't have the hclk, this function is used to add this
+ * hclk for those platforms.
+ */
+static int dw_register_dummy_clk(struct device *dev, struct dw_dma_platform_data *pdata)
+{
+	struct clk *hclk;
+	struct clk_init_data *clk_init;
+
+	int retval = -ENOMEM;
+
+	clk_init = kzalloc(sizeof(struct clk_init_data), GFP_KERNEL);
+	if (clk_init == NULL) {
+		dev_err(dev, "DMA: can't kzalloc memory for clk_init\n");
+		goto err_clk_init;
+	}
+
+	clk_init->name  = "hclk";
+	clk_init->ops   = &clk_fixed_rate_ops;
+	clk_init->flags = CLK_IS_ROOT;
+
+	pdata->hw_clk = devm_kzalloc(dev, sizeof(struct clk_hw), GFP_KERNEL);
+	if (pdata->hw_clk == NULL) {
+		dev_err(dev, "DMA: can't kzalloc memory for hw_clk\n");
+		goto err_hwclk_alloc;
+	}
+
+	pdata->hw_clk->init = clk_init;
+
+	hclk = devm_clk_register(dev, pdata->hw_clk);
+	if (hclk == NULL) {
+		dev_err(dev, "DMA: hclk not registered\n");
+		retval = -ENODEV;
+		goto err_clk_register;
+	}
+
+	pdata->lookup_clk = clkdev_alloc(hclk, pdata->hw_clk->init->name, NULL);
+	if (pdata->lookup_clk == NULL) {
+		dev_err(dev, "DMA: can't kzalloc memory for lookup_clk\n");
+		goto err_clk_dev_alloc;
+	}
+
+	clkdev_add(pdata->lookup_clk);
+
+	return 0;
+
+err_clk_dev_alloc:
+	clk_unregister(hclk);
+err_clk_register:
+	kfree(pdata->hw_clk);
+err_hwclk_alloc:
+	kfree(clk_init);
+err_clk_init:
+
+	return retval;
+}
+
+/**
+ * dw_unregister_dummy_clk - unregister dummy CLK
+ * for Synopsys DMA engine and release all CLK resources
+ */
+static void dw_unregister_dummy_clk(struct dw_dma_platform_data *pdata)
+{
+	struct clk *hclk;
+
+	if (pdata->lookup_clk) {
+		hclk = pdata->lookup_clk->clk;
+		/* remove lookup_clk from list and release memory resources */
+		clkdev_drop(pdata->lookup_clk);
+
+		clk_unregister(hclk);
+
+		if (pdata->hw_clk) {
+			if (pdata->hw_clk->init) {
+				/* free clk_init */
+				kfree(pdata->hw_clk->init);
+			}
+
+			kfree(pdata->hw_clk);	/* free hw_clk */
+		}
+
+		pdata->lookup_clk = NULL;
+	}
+}
+
+/**
+ * dw_adsp_register - register dma engine device with the parent device, resource and data.
+ * pdata--dma platform data.
+ * return NULL if platform devic register error
+ */
+struct platform_device * dw_adsp_register(struct device *parent, const char *name,
+		const struct resource *res, unsigned int num,
+		struct dw_dma_platform_data *pdata, size_t pdata_size, bool need_clk)
+{
+	struct platform_device *pdev = NULL;
+
+	if (need_clk) {
+		if (dw_register_dummy_clk(parent, pdata) < 0)
+			return NULL;
+	}
+
+	pdev = platform_device_register_resndata(parent, name, -1, res, num,
+			(const void *)pdata, pdata_size);
+	if (NULL == pdev) {
+		dev_err(parent, "DMA: platform device not registered\n");
+		dw_unregister_dummy_clk(pdata);
+	}
+
+	return pdev;
+}
+EXPORT_SYMBOL_GPL(dw_adsp_register);
+
+/**
+ * dw_adsp_unregister - unregister dma engine device.
+ * pdev--the dma engine platform device to be unregister.
+ */
+void dw_adsp_unregister(struct platform_device * pdev)
+{
+	struct dw_dma_platform_data *pdata;
+
+	pdata = dev_get_platdata(&pdev->dev);
+	dw_unregister_dummy_clk(pdata);
+	platform_device_unregister(pdev);
+}
+EXPORT_SYMBOL_GPL(dw_adsp_unregister);
 
 static void dw_shutdown(struct platform_device *pdev)
 {

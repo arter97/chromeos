@@ -59,6 +59,8 @@ struct dw_dma_platform_data {
 	unsigned short	block_size;
 	unsigned char	nr_masters;
 	unsigned char	data_width[4];
+	struct clk_hw		*hw_clk;
+	struct clk_lookup	*lookup_clk;
 };
 
 /* bursts size */
@@ -110,5 +112,10 @@ void dw_dma_cyclic_stop(struct dma_chan *chan);
 dma_addr_t dw_dma_get_src_addr(struct dma_chan *chan);
 
 dma_addr_t dw_dma_get_dst_addr(struct dma_chan *chan);
+
+struct platform_device * dw_adsp_register(struct device *parent, const char *name,
+		const struct resource *res, unsigned int num,
+		struct dw_dma_platform_data *pdata, size_t pdata_size, bool need_clk);
+void dw_adsp_unregister(struct platform_device * pdev);
 
 #endif /* DW_DMAC_H */
