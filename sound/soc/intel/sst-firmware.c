@@ -221,6 +221,7 @@ static int block_alloc_contiguous(struct sst_module *module,
 	struct list_head tmp = LIST_HEAD_INIT(tmp);
 	struct sst_dsp *dsp = module->dsp;
 	struct sst_mem_block *block;
+	u32 block_start = 0xffffffff;
 
 	while (size > 0) {
 		block = find_block(dsp, data->type, offset);
@@ -234,8 +235,19 @@ static int block_alloc_contiguous(struct sst_module *module,
 		size -= block->size;
 	}
 
-	list_for_each_entry(block, &tmp, list)
+	list_for_each_entry(block, &tmp, list) {
+		if (block->offset < block_start)
+			block_start = block->offset;
 		list_add(&block->module_list, &module->block_list);
+
+		dev_dbg(dsp->dev, "module %d added block %d:%d at offset 0x%x\n",
+			module->id, block->type, block->index, block->offset);
+
+	}
+
+	/* save start offset for scratch blocks */
+	if (data->data_type == SST_DATA_S)
+		data->offset = block_start;
 
 	list_splice(&tmp, &dsp->used_block_list);
 

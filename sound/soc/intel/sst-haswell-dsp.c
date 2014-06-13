@@ -213,7 +213,7 @@ static int hsw_parse_fw_image(struct sst_fw *sst_fw)
 	}
 
 	/* allocate scratch mem regions */
-	scratch = sst_mem_block_alloc_scratch(dsp);
+	scratch = sst_mem_block_alloc_scratch(dsp, sst_fw);
 	if (scratch == NULL)
 		return -ENOMEM;
 
