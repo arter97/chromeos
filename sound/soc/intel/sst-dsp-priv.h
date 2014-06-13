@@ -301,7 +301,8 @@ int sst_module_insert_fixed_block(struct sst_module *module,
 struct sst_module *sst_module_get_from_id(struct sst_dsp *dsp, u32 id);
 
 /* allocate/free pesistent/scratch memory regions managed by drv */
-struct sst_module *sst_mem_block_alloc_scratch(struct sst_dsp *dsp);
+struct sst_module *sst_mem_block_alloc_scratch(struct sst_dsp *dsp,
+	struct sst_fw *sst_fw);
 void sst_mem_block_free_scratch(struct sst_dsp *dsp,
 	struct sst_module *scratch);
 int sst_module_alloc_persistent(struct sst_dsp *dsp, struct sst_module *module);
