@@ -516,8 +516,8 @@ static int block_alloc(struct sst_module *module,
 		block->bytes_used = data->size % block->size;
 		list_add(&block->module_list, &module->block_list);
 		list_move(&block->list, &dsp->used_block_list);
-		dev_dbg(dsp->dev, " *module %d added block %d:%d\n",
-			module->id, block->type, block->index);
+		dev_dbg(dsp->dev, "module %d added block %d:%d at offset 0x%x\n",
+			module->id, block->type, block->index, block->offset);
 		return 0;
 	}
 
@@ -564,6 +564,8 @@ static void block_module_remove(struct sst_module *module)
 	list_for_each_entry_safe(block, tmp, &module->block_list, module_list) {
 		list_del(&block->module_list);
 		list_move(&block->list, &dsp->free_block_list);
+		dev_dbg(dsp->dev, "module %d free block %d:%d at offset 0x%x\n",
+			module->id, block->type, block->index, block->offset);
 	}
 }
 
@@ -646,6 +648,9 @@ static int block_alloc_fixed(struct sst_module *module,
 			block->data_type = data->data_type;
 			list_move(&block->list, &dsp->used_block_list);
 			list_add(&block->module_list, &module->block_list);
+			dev_dbg(dsp->dev, "module %d added block %d:%d at offset 0x%x\n",
+				module->id, block->type, block->index,
+				block->offset);
 			return 0;
 		}
 
