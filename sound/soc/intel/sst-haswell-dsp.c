@@ -368,6 +368,14 @@ static void hsw_boot(struct sst_dsp *sst)
 	sst_dsp_shim_update_bits_unlocked(sst, SST_CSR, SST_CSR_STALL, 0x0);
 }
 
+static void hsw_stall(struct sst_dsp *sst)
+{
+	/* stall DSP */
+	sst_dsp_shim_update_bits(sst, SST_CSR,
+		SST_CSR_24MHZ_LPCS | SST_CSR_STALL,
+		SST_CSR_STALL | SST_CSR_24MHZ_LPCS);
+}
+
 static void hsw_sleep(struct sst_dsp *sst)
 {
 	dev_dbg(sst->dev, "HSW_PM dsp runtime suspend\n");
@@ -609,6 +617,7 @@ static void hsw_free(struct sst_dsp *sst)
 struct sst_ops haswell_ops = {
 	.reset = hsw_reset,
 	.boot = hsw_boot,
+	.stall = hsw_stall,
 	.wake = hsw_wake,
 	.sleep = hsw_sleep,
 	.write = sst_shim32_write,
