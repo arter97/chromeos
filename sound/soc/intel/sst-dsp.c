@@ -261,6 +261,13 @@ void sst_dsp_sleep(struct sst_dsp *sst)
 }
 EXPORT_SYMBOL_GPL(sst_dsp_sleep);
 
+void sst_dsp_stall(struct sst_dsp *sst)
+{
+	if (sst->ops->stall)
+		sst->ops->stall(sst);
+}
+EXPORT_SYMBOL_GPL(sst_dsp_stall);
+
 void sst_dsp_ipc_msg_tx(struct sst_dsp *dsp, u32 msg)
 {
 	sst_dsp_shim_write_unlocked(dsp, SST_IPCX, msg | SST_IPCX_BUSY);
