@@ -836,6 +836,7 @@ struct sst_module *sst_mem_block_alloc_scratch(struct sst_dsp *dsp,
 err:
 	list_for_each_entry_safe(block, tmp, &scratch->block_list, module_list)
 		list_del(&block->module_list);
+	kfree(scratch);
 	mutex_unlock(&dsp->mutex);
 	return NULL;
 }
@@ -852,6 +853,7 @@ void sst_mem_block_free_scratch(struct sst_dsp *dsp,
 	list_for_each_entry_safe(block, tmp, &scratch->block_list, module_list)
 		list_del(&block->module_list);
 
+	kfree(scratch);
 	mutex_unlock(&dsp->mutex);
 }
 EXPORT_SYMBOL_GPL(sst_mem_block_free_scratch);
