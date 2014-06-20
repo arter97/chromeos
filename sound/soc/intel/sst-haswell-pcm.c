@@ -18,6 +18,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
+#include <linux/pm_runtime.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
 #include <sound/core.h>
@@ -105,6 +106,7 @@ struct hsw_pcm_data {
 struct hsw_priv_data {
 	/* runtime DSP */
 	struct sst_hsw *hsw;
+	struct device *dev;
 
 	/* page tables */
 	struct snd_dma_buffer dmab[HSW_PCM_COUNT][2];
@@ -148,12 +150,15 @@ static int hsw_stream_volume_put(struct snd_kcontrol *kcontrol,
 	u32 volume;
 
 	mutex_lock(&pcm_data->mutex);
+	pm_runtime_get_sync(pdata->dev);
 
 	if (!pcm_data->stream) {
 		pcm_data->volume[0] =
 			hsw_mixer_to_ipc(ucontrol->value.integer.value[0]);
 		pcm_data->volume[1] =
 			hsw_mixer_to_ipc(ucontrol->value.integer.value[1]);
+		pm_runtime_mark_last_busy(pdata->dev);
+		pm_runtime_put_autosuspend(pdata->dev);
 		mutex_unlock(&pcm_data->mutex);
 		return 0;
 	}
@@ -169,6 +174,8 @@ static int hsw_stream_volume_put(struct snd_kcontrol *kcontrol,
 		sst_hsw_stream_set_volume(hsw, pcm_data->stream, 0, 1, volume);
 	}
 
+	pm_runtime_mark_last_busy(pdata->dev);
+	pm_runtime_put_autosuspend(pdata->dev);
 	mutex_unlock(&pcm_data->mutex);
 	return 0;
 }
@@ -186,12 +193,15 @@ static int hsw_stream_volume_get(struct snd_kcontrol *kcontrol,
 	u32 volume;
 
 	mutex_lock(&pcm_data->mutex);
+	pm_runtime_get_sync(pdata->dev);
 
 	if (!pcm_data->stream) {
 		ucontrol->value.integer.value[0] =
 			hsw_ipc_to_mixer(pcm_data->volume[0]);
 		ucontrol->value.integer.value[1] =
 			hsw_ipc_to_mixer(pcm_data->volume[1]);
+		pm_runtime_mark_last_busy(pdata->dev);
+		pm_runtime_put_autosuspend(pdata->dev);
 		mutex_unlock(&pcm_data->mutex);
 		return 0;
 	}
@@ -200,6 +210,9 @@ static int hsw_stream_volume_get(struct snd_kcontrol *kcontrol,
 	ucontrol->value.integer.value[0] = hsw_ipc_to_mixer(volume);
 	sst_hsw_stream_get_volume(hsw, pcm_data->stream, 0, 1, &volume);
 	ucontrol->value.integer.value[1] = hsw_ipc_to_mixer(volume);
+
+	pm_runtime_mark_last_busy(pdata->dev);
+	pm_runtime_put_autosuspend(pdata->dev);
 	mutex_unlock(&pcm_data->mutex);
 
 	return 0;
@@ -212,6 +225,8 @@ static int hsw_volume_put(struct snd_kcontrol *kcontrol,
 	struct hsw_priv_data *pdata = snd_soc_platform_get_drvdata(platform);
 	struct sst_hsw *hsw = pdata->hsw;
 	u32 volume;
+
+	pm_runtime_get_sync(pdata->dev);
 
 	if (ucontrol->value.integer.value[0] ==
 		ucontrol->value.integer.value[1]) {
@@ -227,6 +242,8 @@ static int hsw_volume_put(struct snd_kcontrol *kcontrol,
 		sst_hsw_mixer_set_volume(hsw, 0, 1, volume);
 	}
 
+	pm_runtime_mark_last_busy(pdata->dev);
+	pm_runtime_put_autosuspend(pdata->dev);
 	return 0;
 }
 
@@ -238,12 +255,15 @@ static int hsw_volume_get(struct snd_kcontrol *kcontrol,
 	struct sst_hsw *hsw = pdata->hsw;
 	unsigned int volume = 0;
 
+	pm_runtime_get_sync(pdata->dev);
 	sst_hsw_mixer_get_volume(hsw, 0, 0, &volume);
 	ucontrol->value.integer.value[0] = hsw_ipc_to_mixer(volume);
 
 	sst_hsw_mixer_get_volume(hsw, 0, 1, &volume);
 	ucontrol->value.integer.value[1] = hsw_ipc_to_mixer(volume);
 
+	pm_runtime_mark_last_busy(pdata->dev);
+	pm_runtime_put_autosuspend(pdata->dev);
 	return 0;
 }
 
@@ -598,6 +618,7 @@ static int hsw_pcm_open(struct snd_pcm_substream *substream)
 	pcm_data = &pdata->pcm[rtd->cpu_dai->id];
 
 	mutex_lock(&pcm_data->mutex);
+	pm_runtime_get_sync(pdata->dev);
 
 	snd_soc_pcm_set_drvdata(rtd, pcm_data);
 	pcm_data->substream = substream;
@@ -608,6 +629,8 @@ static int hsw_pcm_open(struct snd_pcm_substream *substream)
 		hsw_notify_pointer, pcm_data);
 	if (pcm_data->stream == NULL) {
 		dev_err(rtd->dev, "error: failed to create stream\n");
+		pm_runtime_mark_last_busy(pdata->dev);
+		pm_runtime_put_autosuspend(pdata->dev);
 		mutex_unlock(&pcm_data->mutex);
 		return -EINVAL;
 	}
@@ -647,6 +670,8 @@ static int hsw_pcm_close(struct snd_pcm_substream *substream)
 	pcm_data->stream = NULL;
 
 out:
+	pm_runtime_mark_last_busy(pdata->dev);
+	pm_runtime_put_autosuspend(pdata->dev);
 	mutex_unlock(&pcm_data->mutex);
 	return ret;
 }
@@ -780,14 +805,18 @@ static int hsw_pcm_probe(struct snd_soc_platform *platform)
 {
 	struct sst_pdata *pdata = dev_get_platdata(platform->dev);
 	struct hsw_priv_data *priv_data;
-	struct device *dma_dev = pdata->dma_dev;
+	struct device *dma_dev, *dev;
 	int i, ret = 0;
 
 	if (!pdata)
 		return -ENODEV;
 
+	dev = platform->dev;
+	dma_dev = pdata->dma_dev;
+
 	priv_data = devm_kzalloc(platform->dev, sizeof(*priv_data), GFP_KERNEL);
 	priv_data->hsw = pdata->dsp;
+	priv_data->dev = platform->dev;
 	snd_soc_platform_set_drvdata(platform, priv_data);
 
 	/* allocate DSP buffer page tables */
@@ -812,6 +841,13 @@ static int hsw_pcm_probe(struct snd_soc_platform *platform)
 		}
 	}
 
+	/* enable runtime PM with auto suspend */
+	pm_runtime_set_autosuspend_delay(platform->dev,
+		SST_RUNTIME_SUSPEND_DELAY);
+	pm_runtime_use_autosuspend(platform->dev);
+	pm_runtime_enable(platform->dev);
+	pm_runtime_idle(platform->dev);
+
 	return 0;
 
 err:
@@ -829,6 +865,8 @@ static int hsw_pcm_remove(struct snd_soc_platform *platform)
 	struct hsw_priv_data *priv_data =
 		snd_soc_platform_get_drvdata(platform);
 	int i;
+
+	pm_runtime_disable(platform->dev);
 
 	for (i = 0; i < ARRAY_SIZE(hsw_dais); i++) {
 		if (hsw_dais[i].playback.channels_min)
