@@ -896,10 +896,48 @@ static int hsw_pcm_dev_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_RUNTIME
+
+static int hsw_pcm_runtime_idle(struct device *dev)
+{
+	return 0;
+}
+
+static int hsw_pcm_runtime_suspend(struct device *dev)
+{
+	struct hsw_priv_data *pdata = dev_get_drvdata(dev);
+	struct sst_hsw *hsw = pdata->hsw;
+
+	return sst_hsw_dsp_runtime_suspend(hsw);
+}
+
+static int hsw_pcm_runtime_resume(struct device *dev)
+{
+	struct hsw_priv_data *pdata = dev_get_drvdata(dev);
+	struct sst_hsw *hsw = pdata->hsw;
+
+	return sst_hsw_dsp_runtime_resume(hsw);
+}
+
+static const struct dev_pm_ops hsw_pcm_pm = {
+	.runtime_idle = hsw_pcm_runtime_idle,
+	.runtime_suspend = hsw_pcm_runtime_suspend,
+	.runtime_resume = hsw_pcm_runtime_resume,
+};
+
+#else
+#define hsw_pcm_runtime_idle	NULL
+#define hsw_pcm_runtime_suspend	NULL
+#define hsw_pcm_runtime_resume	NULL
+#endif
+
 static struct platform_driver hsw_pcm_driver = {
 	.driver = {
 		.name = "haswell-pcm-audio",
 		.owner = THIS_MODULE,
+#ifdef CONFIG_PM_RUNTIME
+		.pm = &hsw_pcm_pm,
+#endif
 	},
 
 	.probe = hsw_pcm_dev_probe,
