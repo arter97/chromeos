@@ -137,6 +137,8 @@ int sst_dsp_dma_get_channel(struct sst_dsp *dsp, int chan_id)
 	dma_cap_mask_t mask;
 	int ret;
 
+	dw_adsp_get(dma->dma_dev);
+
 	/* The Intel MID DMA engine driver needs the slave config set but
 	 * Synopsis DMA engine driver safely ignores the slave config */
 	dma_cap_zero(mask);
@@ -146,6 +148,7 @@ int sst_dsp_dma_get_channel(struct sst_dsp *dsp, int chan_id)
 	dma->ch = dma_request_channel(mask, dma_chan_filter, dsp);
 	if (dma->ch == NULL) {
 		dev_err(dsp->dev, "error: DMA request channel failed\n");
+		dw_adsp_put(dma->dma_dev);
 		return -EIO;
 	}
 
@@ -160,6 +163,7 @@ int sst_dsp_dma_get_channel(struct sst_dsp *dsp, int chan_id)
 		dev_err(dsp->dev, "error: unable to set DMA slave config %d\n",
 			ret);
 		dma_release_channel(dma->ch);
+		dw_adsp_put(dma->dma_dev);
 		dma->ch = NULL;
 	}
 
@@ -175,6 +179,7 @@ void sst_dsp_dma_put_channel(struct sst_dsp *dsp)
 		return;
 
 	dma_release_channel(dma->ch);
+	dw_adsp_put(dma->dma_dev);
 	dma->ch = NULL;
 }
 EXPORT_SYMBOL_GPL(sst_dsp_dma_put_channel);
@@ -243,6 +248,7 @@ int sst_dma_new(struct sst_dsp *sst)
 		goto err_dma_dev;
 	}
 
+	dw_adsp_put(dma->dma_dev);
 	sst->dma = dma;
 	sst->fw_use_dma = true;
 	return 0;
