@@ -369,6 +369,23 @@ void dw_adsp_unregister(struct platform_device * pdev)
 }
 EXPORT_SYMBOL_GPL(dw_adsp_unregister);
 
+
+int dw_adsp_get(struct platform_device *pdev)
+{
+	struct dw_dma_chip *chip = platform_get_drvdata(pdev);
+
+	return dw_dma_get(chip);
+}
+EXPORT_SYMBOL_GPL(dw_adsp_get);
+
+int dw_adsp_put(struct platform_device *pdev)
+{
+	struct dw_dma_chip *chip = platform_get_drvdata(pdev);
+
+	return dw_dma_put(chip);
+}
+EXPORT_SYMBOL_GPL(dw_adsp_put);
+
 static void dw_shutdown(struct platform_device *pdev)
 {
 	struct dw_dma_chip *chip = platform_get_drvdata(pdev);

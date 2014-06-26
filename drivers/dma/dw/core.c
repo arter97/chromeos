@@ -1691,6 +1691,10 @@ int dw_dma_get(struct dw_dma_chip *chip)
 	dw_params = dma_read_byaddr(chip->regs, DW_PARAMS);
 	autocfg = dw_params >> DW_PARAMS_EN & 0x1;
 
+	err = clk_prepare_enable(dw->clk);
+	if (err)
+		return err;
+
 	dev_dbg(chip->dev, "DW_PARAMS: 0x%08x\n", dw_params);
 
 	/* Force dma off, just in case */

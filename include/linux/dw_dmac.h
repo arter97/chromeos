@@ -120,5 +120,7 @@ struct platform_device * dw_adsp_register(struct device *parent, const char *nam
 		const struct resource *res, unsigned int num,
 		struct dw_dma_platform_data *pdata, size_t pdata_size, bool need_clk);
 void dw_adsp_unregister(struct platform_device * pdev);
+int dw_adsp_get(struct platform_device *pdev);
+int dw_adsp_put(struct platform_device *pdev);
 
 #endif /* DW_DMAC_H */
