@@ -39,6 +39,9 @@ int dw_dma_remove(struct dw_dma_chip *chip);
 
 void dw_dma_shutdown(struct dw_dma_chip *chip);
 
+int dw_dma_put(struct dw_dma_chip *chip);
+int dw_dma_get(struct dw_dma_chip *chip);
+
 #ifdef CONFIG_PM_SLEEP
 
 int dw_dma_suspend(struct dw_dma_chip *chip);

@@ -1679,6 +1679,78 @@ int dw_dma_remove(struct dw_dma_chip *chip)
 }
 EXPORT_SYMBOL_GPL(dw_dma_remove);
 
+int dw_dma_get(struct dw_dma_chip *chip)
+{
+	struct dw_dma		*dw;
+	bool			autocfg;
+	unsigned int		dw_params;
+	int			err;
+
+	dw = chip->dw;
+
+	dw_params = dma_read_byaddr(chip->regs, DW_PARAMS);
+	autocfg = dw_params >> DW_PARAMS_EN & 0x1;
+
+	dev_dbg(chip->dev, "DW_PARAMS: 0x%08x\n", dw_params);
+
+	/* Force dma off, just in case */
+	dw_dma_off(dw);
+
+	/* Disable BLOCK interrupts as well */
+	channel_clear_bit(dw, MASK.BLOCK, dw->all_chan_mask);
+
+	err = request_irq(chip->irq, dw_dma_interrupt, IRQF_SHARED,
+			  "dw_dmac", dw);
+	if (err)
+		goto err_pdata;
+
+	/* Clear all interrupts on all channels. */
+	dma_writel(dw, CLEAR.XFER, dw->all_chan_mask);
+	dma_writel(dw, CLEAR.BLOCK, dw->all_chan_mask);
+	dma_writel(dw, CLEAR.SRC_TRAN, dw->all_chan_mask);
+	dma_writel(dw, CLEAR.DST_TRAN, dw->all_chan_mask);
+	dma_writel(dw, CLEAR.ERROR, dw->all_chan_mask);
+
+	//if (pdata->is_private)
+		dma_cap_set(DMA_PRIVATE, dw->dma.cap_mask);
+
+	dma_writel(dw, CFG, DW_CFG_DMA_EN);
+
+	err = dma_async_device_register(&dw->dma);
+	if (err)
+		goto err_dma_register;
+
+	return 0;
+
+err_dma_register:
+	free_irq(chip->irq, dw);
+err_pdata:
+	clk_disable_unprepare(dw->clk);
+	return err;
+}
+EXPORT_SYMBOL_GPL(dw_dma_get);
+
+int dw_dma_put(struct dw_dma_chip *chip)
+{
+	struct dw_dma		*dw = chip->dw;
+	struct dw_dma_chan	*dwc, *_dwc;
+
+	dw_dma_off(dw);
+	dma_async_device_unregister(&dw->dma);
+
+	free_irq(chip->irq, dw);
+
+	list_for_each_entry_safe(dwc, _dwc, &dw->dma.channels,
+			chan.device_node) {
+		channel_clear_bit(dw, CH_EN, dwc->mask);
+	}
+
+	clk_disable_unprepare(dw->clk);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(dw_dma_put);
+
 void dw_dma_shutdown(struct dw_dma_chip *chip)
 {
 	struct dw_dma *dw = chip->dw;
