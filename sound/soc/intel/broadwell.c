@@ -20,11 +20,16 @@
 #include <sound/pcm.h>
 #include <sound/soc.h>
 #include <sound/pcm_params.h>
+#include <sound/jack.h>
 
 #include "sst-dsp.h"
 #include "sst-haswell-ipc.h"
 
 #include "../codecs/rt286.h"
+
+struct broadwell_priv {
+	struct snd_soc_jack hs_jack;
+};
 
 static const struct snd_soc_dapm_widget broadwell_widgets[] = {
 	SND_SOC_DAPM_HP("Headphones", NULL),
@@ -55,6 +60,17 @@ static const struct snd_soc_dapm_route broadwell_rt286_map[] = {
 	/* CODEC BE connections */
 	{"SSP0 CODEC IN", NULL, "AIF1 Capture"},
 	{"AIF1 Playback", NULL, "SSP0 CODEC OUT"},
+};
+
+static struct snd_soc_jack_pin hs_jack_pins[] = {
+	{
+		.pin	= "Headphones",
+		.mask	= SND_JACK_HEADPHONE,
+	},
+	{
+		.pin	= "Mic Jack",
+		.mask	= SND_JACK_MICROPHONE,
+	},
 };
 
 static int broadwell_ssp0_fixup(struct snd_soc_pcm_runtime *rtd,
@@ -122,6 +138,28 @@ static int broadwell_rtd_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_enable_pin(dapm, "Line Jack");
 	snd_soc_dapm_enable_pin(dapm, "DMIC1");
 	snd_soc_dapm_enable_pin(dapm, "DMIC2");
+
+	return 0;
+}
+
+static int broadwell_init(struct snd_soc_pcm_runtime *rtd)
+{
+	struct snd_soc_codec *codec = rtd->codec;
+	struct broadwell_priv *priv = snd_soc_card_get_drvdata(codec->card);
+	int ret;
+
+	ret = snd_soc_jack_new(codec, "Headphone Jack", SND_JACK_HEADSET,
+				&priv->hs_jack);
+	if (ret)
+		return ret;
+
+	ret = snd_soc_jack_add_pins(&priv->hs_jack, ARRAY_SIZE(hs_jack_pins), hs_jack_pins);
+	if (ret)
+		return ret;
+
+	ret = rt286_mic_detect(codec, &priv->hs_jack);
+	if (ret)
+		return ret;
 
 	return 0;
 }
@@ -204,6 +242,7 @@ static struct snd_soc_dai_link broadwell_rt286_dais[] = {
 		.ops = &broadwell_rt286_ops,
 		.dpcm_playback = 1,
 		.dpcm_capture = 1,
+		.init = broadwell_init,
 	},
 };
 
@@ -222,7 +261,15 @@ static struct snd_soc_card broadwell_rt286 = {
 
 static int broadwell_audio_probe(struct platform_device *pdev)
 {
+	struct broadwell_priv *priv;
+
 	broadwell_rt286.dev = &pdev->dev;
+
+	priv = devm_kzalloc(&pdev->dev, sizeof(struct broadwell_priv), GFP_KERNEL);
+	if (!priv)
+		return -ENOMEM;
+
+	snd_soc_card_set_drvdata(&broadwell_rt286, priv);
 
 	return snd_soc_register_card(&broadwell_rt286);
 }
