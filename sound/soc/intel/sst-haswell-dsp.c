@@ -112,7 +112,7 @@ static int hsw_parse_module(struct sst_dsp *dsp, struct sst_fw *fw,
 
 	memset(&template, 0, sizeof(template));
 	template.id = module->type;
-	template.entry = module->entry_point;
+	template.entry = module->entry_point - 4;
 	template.p.size = module->info.persistent_size;
 
 	if (module->type == SST_HSW_MODULE_PCM)
