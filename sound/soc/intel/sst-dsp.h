@@ -165,6 +165,9 @@
 #define SST_PMCS		0x84
 #define SST_PMCS_PS_MASK	0x3
 
+/* use 0xFFFFFFFF as DSP_NULL since 0 is a valid dsp iram location */
+#define SST_DSP_NULL 0xFFFFFFFF
+
 struct sst_dsp;
 
 /*
