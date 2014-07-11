@@ -942,3 +942,20 @@ struct sst_module *sst_module_get_from_id(struct sst_dsp *dsp, u32 id)
 	return NULL;
 }
 EXPORT_SYMBOL_GPL(sst_module_get_from_id);
+
+/* returns block address in DSP address space */
+u32 sst_module_get_block_dsp_offset(struct sst_module_data *block,
+	struct sst_dsp *dsp)
+{
+	switch (block->type) {
+	case SST_MEM_IRAM:
+		return block->offset - dsp->addr.iram_offset +
+			dsp->addr.dsp_iram_offset;
+	case SST_MEM_DRAM:
+		return block->offset - dsp->addr.dram_offset +
+			dsp->addr.dsp_dram_offset;
+	default:
+		return 0;
+	}
+}
+EXPORT_SYMBOL_GPL(sst_module_get_block_dsp_offset);
