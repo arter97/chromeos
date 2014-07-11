@@ -499,23 +499,9 @@ static int hsw_pcm_hw_params(struct snd_pcm_substream *substream,
 		dev_err(rtd->dev, "error: failed to get module config\n");
 		return -EINVAL;
 	}
-	sst_hsw_stream_set_module_info(hsw, pcm_data->stream,
-		module_id, module_data->entry);
-	if (module_id == SST_HSW_MODULE_PCM) {
-		if (rtd->cpu_dai->id == 1)
-			sst_hsw_stream_set_pmemory_info(hsw, pcm_data->stream,
-				module_data->p.offset,
-				module_data->p.size / 2);
-		if (rtd->cpu_dai->id == 2)
-			sst_hsw_stream_set_pmemory_info(hsw, pcm_data->stream,
-				module_data->p.offset + module_data->p.size / 2,
-				module_data->p.size / 2);
-	 } else
-		sst_hsw_stream_set_pmemory_info(hsw, pcm_data->stream,
-			module_data->p.offset, module_data->p.size);
 
-	sst_hsw_stream_set_smemory_info(hsw, pcm_data->stream,
-		module_data->s.offset, module_data->s.size);
+	sst_hsw_stream_set_module_info(hsw, pcm_data->stream,
+		module_data);
 
 	ret = sst_hsw_stream_commit(hsw, pcm_data->stream);
 	if (ret < 0) {
