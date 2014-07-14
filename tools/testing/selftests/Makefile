@@ -10,6 +10,7 @@ TARGETS += timers
 TARGETS += vm
 TARGETS += powerpc
 TARGETS += user
+TARGETS += firmware
 
 all:
 	for TARGET in $(TARGETS); do \
