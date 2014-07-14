@@ -1294,6 +1294,8 @@ struct net_device {
 	struct kset		*queues_kset;
 #endif
 
+	unsigned char		name_assign_type;
+
 	bool			uc_promisc;
 	unsigned int		promiscuity;
 	unsigned int		allmulti;
