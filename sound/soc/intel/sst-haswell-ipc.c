@@ -1384,8 +1384,8 @@ int sst_hsw_stream_set_module_info(struct sst_hsw *hsw,
 	stream->request.persistent_mem.size = module->p.size;
 
 	stream->request.scratch_mem.offset =
-		sst_module_get_block_dsp_offset(&module->s, dsp);
-	stream->request.scratch_mem.size = module->s.size;
+		sst_module_get_block_dsp_offset(&hsw->scratch->s, dsp);
+	stream->request.scratch_mem.size = hsw->scratch->s.size;
 
 	dev_dbg(hsw->dev, "Module %d allocate persistent=0x%x(%x), scratch=0x%x(%x)",
 		module->id, stream->request.persistent_mem.offset,
