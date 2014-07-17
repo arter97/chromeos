@@ -4482,6 +4482,9 @@ static int rt5677_probe(struct snd_soc_codec *codec)
 
 	rt5677_set_bias_level(codec, SND_SOC_BIAS_OFF);
 
+	/* HP_AMP_SHDN_L: drive GPIO2 high */
+	regmap_write(rt5677->regmap, RT5677_GPIO_CTRL2, (1<<4) | (1<<5));
+
 	return 0;
 }
 
