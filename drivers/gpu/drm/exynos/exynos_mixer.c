@@ -1351,6 +1351,16 @@ static struct exynos_drm_manager mixer_manager = {
 	.ops			= &mixer_manager_ops,
 };
 
+int mixer_mode_valid(struct drm_display_mode *mode)
+{
+	struct mixer_context *mctx = mixer_manager.ctx;
+	enum exynos_mixer_mode_type mt;
+
+	mt = exynos_mixer_get_mode_type(mctx, mode->hdisplay, mode->vdisplay);
+
+	return (mt == EXYNOS_MIXER_MODE_INVALID) ? MODE_BAD : MODE_OK;
+}
+
 static inline void mixer_update_workaround_state(struct mixer_context *mctx)
 {
 	struct mixer_resources *res = &mctx->mixer_res;

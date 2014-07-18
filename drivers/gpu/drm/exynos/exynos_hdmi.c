@@ -2863,11 +2863,18 @@ static int hdmi_mode_valid(struct drm_connector *connector,
 	struct hdmi_context *hdata = ctx_from_connector(connector);
 	struct exynos_drm_manager *manager =
 				exynos_drm_manager_from_display(&hdmi_display);
+	int ret = MODE_OK;
 
 	if (manager && manager->ops->adjust_mode)
 		manager->ops->adjust_mode(manager->ctx, connector, mode);
 
-	return !hdmi_check_mode(hdata, mode) ? MODE_OK : MODE_BAD;
+	ret = mixer_mode_valid(mode);
+	if (ret != MODE_OK)
+		return ret;
+
+	if (hdmi_check_mode(hdata, mode))
+		ret = MODE_BAD;
+	return ret;
 }
 
 static void hdmi_hotplug_work_func(struct work_struct *work)
