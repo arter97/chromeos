@@ -48,6 +48,7 @@
 
 #define HOTPLUG_DEBOUNCE_MS	1100
 #define get_hdmi_context(dev)	platform_get_drvdata(to_platform_device(dev))
+#define ctx_from_encoder(e)	container_of(e, struct hdmi_context, encoder)
 #define ctx_from_connector(c)	container_of(c, struct hdmi_context, connector)
 
 /* AVI header and aspect ratio */
@@ -2857,10 +2858,16 @@ static struct exynos_drm_display hdmi_display = {
 	.ops = &hdmi_display_ops,
 };
 
-static int hdmi_mode_valid(struct drm_connector *connector,
+/* We should be careful here and make sure functions that take connector
+ * as argument here only use the device independent part. In particular
+ * this function may be called from ANX7808 bridge via encoder_mode_valid
+ * so the private part of drm_connector in this case would belong to ANX
+ * driver.
+ */
+static int hdmi_mode_valid_common(struct drm_connector *connector,
+				struct hdmi_context *hdata,
 				struct drm_display_mode *mode)
 {
-	struct hdmi_context *hdata = ctx_from_connector(connector);
 	struct exynos_drm_manager *manager =
 				exynos_drm_manager_from_display(&hdmi_display);
 	int ret = MODE_OK;
@@ -2875,6 +2882,21 @@ static int hdmi_mode_valid(struct drm_connector *connector,
 	if (hdmi_check_mode(hdata, mode))
 		ret = MODE_BAD;
 	return ret;
+}
+
+static int hdmi_mode_valid(struct drm_connector *connector,
+				struct drm_display_mode *mode)
+{
+	struct hdmi_context *hdata = ctx_from_connector(connector);
+	return hdmi_mode_valid_common(connector, mode, hdata);
+}
+
+int exynos_hdmi_encoder_mode_valid(struct drm_encoder *encoder,
+					struct drm_connector *connector,
+					struct drm_display_mode *mode)
+{
+	struct hdmi_context *hdata = ctx_from_encoder(encoder);
+	return hdmi_mode_valid_common(connector, mode, hdata);
 }
 
 static void hdmi_hotplug_work_func(struct work_struct *work)
