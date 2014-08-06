@@ -41,6 +41,7 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 			return PTR_ERR(tegra->domain);
 		}
 
+		DRM_DEBUG("IOMMU context initialized\n");
 		drm_mm_init(&tegra->mm, 0, SZ_2G);
 	}
 
@@ -132,6 +133,9 @@ static void tegra_drm_lastclose(struct drm_device *drm)
 #endif
 }
 
+/*
+ * TODO: Revisit locking and reference counting
+ */
 static struct host1x_bo *
 host1x_bo_lookup(struct drm_device *drm, struct drm_file *file, u32 handle)
 {
