@@ -116,6 +116,13 @@ enum mipi_dsi_pixel_format {
 	MIPI_DSI_FMT_RGB565,
 };
 
+struct mipi_dsi_master_ops {
+	int (*enslave)(struct mipi_dsi_device *master,
+		       struct mipi_dsi_device *slave);
+	int (*liberate)(struct mipi_dsi_device *master,
+			struct mipi_dsi_device *slave);
+};
+
 /**
  * struct mipi_dsi_device - DSI peripheral device
  * @host: DSI host for this peripheral
@@ -124,6 +131,13 @@ enum mipi_dsi_pixel_format {
  * @format: pixel format for video mode
  * @lanes: number of active data lanes
  * @mode_flags: DSI operation mode related flags
+ * @ops: callbacks for master/slave setup
+ * @master: master interface for dual-channel peripherals
+ * @slave: slave interface for dual-channel peripherals
+ *
+ * For dual-channel interfaces, the master interface can be identified by the
+ * fact that it's .slave field is set to non-NULL. The slave interface will
+ * have the .master field set to non-NULL.
  */
 struct mipi_dsi_device {
 	struct mipi_dsi_host *host;
@@ -133,6 +147,10 @@ struct mipi_dsi_device {
 	unsigned int lanes;
 	enum mipi_dsi_pixel_format format;
 	unsigned long mode_flags;
+
+	const struct mipi_dsi_master_ops *ops;
+	struct mipi_dsi_device *master;
+	struct mipi_dsi_device *slave;
 };
 
 static inline struct mipi_dsi_device *to_mipi_dsi_device(struct device *dev)
@@ -143,6 +161,11 @@ static inline struct mipi_dsi_device *to_mipi_dsi_device(struct device *dev)
 struct mipi_dsi_device *of_find_mipi_dsi_by_node(struct device_node *np);
 int mipi_dsi_attach(struct mipi_dsi_device *dsi);
 int mipi_dsi_detach(struct mipi_dsi_device *dsi);
+struct mipi_dsi_device *mipi_dsi_get_master(struct mipi_dsi_device *dsi);
+int mipi_dsi_enslave(struct mipi_dsi_device *master,
+		     struct mipi_dsi_device *slave);
+int mipi_dsi_liberate(struct mipi_dsi_device *master,
+		      struct mipi_dsi_device *slave);
 int mipi_dsi_set_maximum_return_packet_size(struct mipi_dsi_device *dsi,
 					    u16 value);
 

@@ -227,6 +227,89 @@ int mipi_dsi_detach(struct mipi_dsi_device *dsi)
 }
 EXPORT_SYMBOL(mipi_dsi_detach);
 
+/**
+ * mipi_dsi_get_master() - obtain a reference to the master associated with a
+ *    given DSI peripheral
+ * @dsi: DSI peripheral device
+ *
+ * Return: A pointer to the DSI master peripheral, NULL if this device is not
+ *    a slave or an ERR_PTR()-encoded negative error code on failure.
+ */
+struct mipi_dsi_device *mipi_dsi_get_master(struct mipi_dsi_device *dsi)
+{
+	if (IS_ENABLED(CONFIG_OF) && dsi->dev.of_node) {
+		struct mipi_dsi_device *master;
+		struct device_node *np;
+
+		/*
+		 * If no master property exists, then this is either the
+		 * master itself or it isn't a dual-channel peripheral.
+		 */
+		if (!of_get_property(dsi->dev.of_node, "master", NULL))
+			return NULL;
+
+		np = of_parse_phandle(dsi->dev.of_node, "master", 0);
+		if (!np)
+			return ERR_PTR(-ENODEV);
+
+		master = of_find_mipi_dsi_by_node(np);
+		if (!master)
+			master = ERR_PTR(-EPROBE_DEFER);
+
+		of_node_put(np);
+		return master;
+	}
+
+	return NULL;
+}
+
+/**
+ * mipi_dsi_enslave() - use a MIPI DSI peripheral as slave for dual-channel
+ *    operation
+ * @master: master DSI peripheral device
+ * @slave: slave DSI peripheral device
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+int mipi_dsi_enslave(struct mipi_dsi_device *master,
+		     struct mipi_dsi_device *slave)
+{
+	int err = 0;
+
+	dev_dbg(&master->dev, "enslaving %s\n", dev_name(&slave->dev));
+	slave->master = master;
+	master->slave = slave;
+
+	if (master->ops && master->ops->enslave)
+		err = master->ops->enslave(master, slave);
+
+	return err;
+}
+EXPORT_SYMBOL(mipi_dsi_enslave);
+
+/**
+ * mipi_dsi_liberate() - stop using a MIPI DSI peripheral as slave for dual-
+ *    channel operation
+ * @master: master DSI peripheral device
+ * @slave: slave DSI peripheral device
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+int mipi_dsi_liberate(struct mipi_dsi_device *master,
+		      struct mipi_dsi_device *slave)
+{
+	int err = 0;
+
+	if (master->ops && master->ops->liberate)
+		err = master->ops->liberate(master, slave);
+
+	master->slave = NULL;
+	slave->master = NULL;
+
+	return err;
+}
+EXPORT_SYMBOL(mipi_dsi_liberate);
+
 /*
  * mipi_dsi_set_maximum_return_packet_size() - specify the maximum size of the
  *    the payload in a long packet transmitted from the peripheral back to the
@@ -807,8 +890,13 @@ static int mipi_dsi_drv_remove(struct device *dev)
 {
 	struct mipi_dsi_driver *drv = to_mipi_dsi_driver(dev->driver);
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(dev);
+	int err;
 
-	return drv->remove(dsi);
+	err = drv->remove(dsi);
+
+	dsi->ops = NULL;
+
+	return err;
 }
 
 static void mipi_dsi_drv_shutdown(struct device *dev)
