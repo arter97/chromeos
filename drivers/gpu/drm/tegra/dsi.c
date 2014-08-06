@@ -56,44 +56,10 @@ struct tegra_dsi {
 	unsigned int host_fifo_depth;
 
 	/* for ganged-mode support */
+	unsigned int ganged_lanes;
 	struct tegra_dsi *slave;
-	struct list_head list;
 	bool ganged_mode;
 };
-
-static LIST_HEAD(tegra_dsi_controllers);
-static DEFINE_SPINLOCK(tegra_dsi_lock);
-
-static void tegra_dsi_add(struct tegra_dsi *dsi)
-{
-	spin_lock(&tegra_dsi_lock);
-	list_add_tail(&dsi->list, &tegra_dsi_controllers);
-	spin_unlock(&tegra_dsi_lock);
-}
-
-static void tegra_dsi_del(struct tegra_dsi *dsi)
-{
-	spin_lock(&tegra_dsi_lock);
-	list_del_init(&dsi->list);
-	spin_unlock(&tegra_dsi_lock);
-}
-
-static struct tegra_dsi *tegra_dsi_find(struct device_node *np)
-{
-	struct tegra_dsi *dsi;
-
-	spin_lock(&tegra_dsi_lock);
-
-	list_for_each_entry(dsi, &tegra_dsi_controllers, list) {
-		if (dsi->dev->of_node == np) {
-			spin_unlock(&tegra_dsi_lock);
-			return dsi;
-		}
-	}
-
-	spin_unlock(&tegra_dsi_lock);
-	return ERR_PTR(-EPROBE_DEFER);
-}
 
 static inline struct tegra_dsi *
 host1x_client_to_dsi(struct host1x_client *client)
@@ -533,14 +499,8 @@ static int tegra_dsi_configure(struct tegra_dsi *dsi, unsigned int pipe,
 		return err;
 
 	value = DSI_CONTROL_CHANNEL(0) | DSI_CONTROL_FORMAT(format) |
+		DSI_CONTROL_LANES(dsi->lanes - 1) |
 		DSI_CONTROL_SOURCE(pipe);
-
-	/* FIXME: implement proper check for ganged mode? */
-	if (dsi->lanes > 4)
-		value |= DSI_CONTROL_LANES(dsi->lanes / 2 - 1);
-	else
-		value |= DSI_CONTROL_LANES(dsi->lanes - 1);
-
 	tegra_dsi_writel(dsi, value, DSI_CONTROL);
 
 	tegra_dsi_writel(dsi, dsi->video_fifo_depth, DSI_MAX_THRESHOLD);
@@ -622,7 +582,7 @@ static int tegra_dsi_configure(struct tegra_dsi *dsi, unsigned int pipe,
 		/* set SOL delay */
 		if (dsi->ganged_mode) {
 			unsigned long delay, bclk, bclk_ganged;
-			unsigned long lanes = dsi->lanes;
+			unsigned int lanes = dsi->ganged_lanes;
 
 			/* SOL to valid, valid to FIFO and FIFO write delay */
 			delay = 4 + 4 + 2;
@@ -788,7 +748,7 @@ static int tegra_output_dsi_disable(struct tegra_output *output)
 		tegra_dc_writel(dc, GENERAL_ACT_REQ, DC_CMD_STATE_CONTROL);
 	}
 
-	err = tegra_dsi_wait_idle(dsi, 250);
+	err = tegra_dsi_wait_idle(dsi, 100);
 	if (err < 0)
 		dev_dbg(dsi->dev, "failed to idle DSI: %d\n", err);
 
@@ -828,8 +788,8 @@ static int tegra_output_dsi_setup_clock(struct tegra_output *output,
 {
 	struct tegra_dc *dc = to_tegra_dc(output->encoder.crtc);
 	struct drm_display_mode *mode = &dc->base.mode;
+	unsigned int mul, div, vrefresh, num_lanes;
 	struct tegra_dsi *dsi = to_dsi(output);
-	unsigned int mul, div, vrefresh;
 	unsigned long bclk, plld;
 	int err;
 
@@ -837,12 +797,21 @@ static int tegra_output_dsi_setup_clock(struct tegra_output *output,
 	if (err < 0)
 		return err;
 
-	DRM_DEBUG_KMS("mul: %u, div: %u, lanes: %u\n", mul, div, dsi->lanes);
+	/*
+	 * In ganged mode, account for the total number of lanes across both
+	 * DSI channels so that the bit clock is properly computed.
+	 */
+	if (dsi->ganged_mode)
+		num_lanes = dsi->ganged_lanes;
+	else
+		num_lanes = dsi->lanes;
+
+	DRM_DEBUG_KMS("mul: %u, div: %u, lanes: %u\n", mul, div, num_lanes);
 	vrefresh = drm_mode_vrefresh(mode);
 	DRM_DEBUG_KMS("vrefresh: %u\n", vrefresh);
 
 	/* compute byte clock */
-	bclk = (pclk * mul) / (div * dsi->lanes);
+	bclk = (pclk * mul) / (div * num_lanes);
 
 	/*
 	 * Compute bit clock and round up to the next MHz.
@@ -879,7 +848,7 @@ static int tegra_output_dsi_setup_clock(struct tegra_output *output,
 	 * not working properly otherwise. Perhaps the PLLs cannot generate
 	 * frequencies sufficiently high.
 	 */
-	*divp = ((8 * mul) / (div * dsi->lanes)) - 2;
+	*divp = ((8 * mul) / (div * num_lanes)) - 2;
 
 	/*
 	 * XXX: Move the below somewhere else so that we don't need to have
@@ -1014,16 +983,6 @@ static int tegra_dsi_setup_clocks(struct tegra_dsi *dsi)
 	if (err < 0)
 		return err;
 
-	if (dsi->slave) {
-		parent = clk_get_parent(dsi->slave->clk);
-		if (!parent)
-			return -EINVAL;
-
-		err = clk_set_parent(parent, dsi->clk_parent);
-		if (err < 0)
-			return err;
-	}
-
 	return 0;
 }
 
@@ -1096,7 +1055,7 @@ static int tegra_dsi_read_response(struct tegra_dsi *dsi,
 	size = min(size, msg->rx_len);
 
 	if (msg->rx_buf && size > 0) {
-		for (i = 0, j = 0; i < count - 2; i++, j += 4) {
+		for (i = 0, j = 0; i < count - 1; i++, j += 4) {
 			u8 *rx = msg->rx_buf + j;
 
 			value = tegra_dsi_readl(dsi, DSI_RD_DATA);
@@ -1268,20 +1227,61 @@ static ssize_t tegra_dsi_host_transfer(struct mipi_dsi_host *host,
 	return 0;
 }
 
+static int tegra_dsi_ganged_setup(struct tegra_dsi *dsi,
+				  struct mipi_dsi_host *slave)
+{
+	struct clk *parent;
+	int err;
+
+	/* only Tegra DSI hosts can be enslaved */
+	if (slave->dev->driver != dsi->host.dev->driver)
+		return -EINVAL;
+
+	dsi->slave = host_to_tegra(slave);
+
+	/*
+	 * The number of ganged lanes is the sum of lanes of all peripherals
+	 * in the gang.
+	 */
+	dsi->slave->ganged_lanes = dsi->lanes + dsi->slave->lanes;
+	dsi->slave->ganged_mode = true;
+
+	dsi->ganged_lanes = dsi->lanes + dsi->slave->lanes;
+	dsi->ganged_mode = true;
+
+	/* make sure both DSI controllers share the same PLL */
+	parent = clk_get_parent(dsi->slave->clk);
+	if (!parent)
+		return -EINVAL;
+
+	err = clk_set_parent(parent, dsi->clk_parent);
+	if (err < 0)
+		return err;
+
+	return 0;
+}
+
 static int tegra_dsi_host_attach(struct mipi_dsi_host *host,
 				 struct mipi_dsi_device *device)
 {
 	struct tegra_dsi *dsi = host_to_tegra(host);
 	struct tegra_output *output = &dsi->output;
+	int err;
 
 	dsi->flags = device->mode_flags;
 	dsi->format = device->format;
 	dsi->lanes = device->lanes;
 
-	if (dsi->slave) {
-		dsi->slave->flags = dsi->flags;
-		dsi->slave->format = dsi->format;
-		dsi->slave->lanes = dsi->lanes;
+	if (device->slave) {
+		dev_dbg(dsi->dev, "attaching dual-channel device %s/%s\n",
+			dev_name(&device->dev), dev_name(&device->slave->dev));
+
+		err = tegra_dsi_ganged_setup(dsi, device->slave->host);
+		if (err < 0) {
+			dev_err(dsi->dev, "failed to set up ganged mode: %d\n",
+				err);
+			return err;
+		}
 	}
 
 	output->panel = of_drm_find_panel(device->dev.of_node);
@@ -1317,28 +1317,6 @@ static const struct mipi_dsi_host_ops tegra_dsi_host_ops = {
 	.transfer = tegra_dsi_host_transfer,
 };
 
-static int tegra_dsi_parse_dt(struct tegra_dsi *dsi)
-{
-	struct device_node *np = dsi->dev->of_node, *slave;
-
-	if (of_find_property(np, "nvidia,ganged-mode", NULL)) {
-		slave = of_parse_phandle(np, "nvidia,ganged-mode", 0);
-		if (slave) {
-			dsi->slave = tegra_dsi_find(slave);
-			of_node_put(slave);
-
-			if (IS_ERR(dsi->slave))
-				return PTR_ERR(dsi->slave);
-
-			dev_info(dsi->dev, "slave found, setting up ganged mode\n");
-		}
-
-		dsi->ganged_mode = true;
-	}
-
-	return 0;
-}
-
 static int tegra_dsi_probe(struct platform_device *pdev)
 {
 	struct tegra_dsi *dsi;
@@ -1352,10 +1330,6 @@ static int tegra_dsi_probe(struct platform_device *pdev)
 	dsi->output.dev = dsi->dev = &pdev->dev;
 	dsi->video_fifo_depth = 1920;
 	dsi->host_fifo_depth = 64;
-
-	err = tegra_dsi_parse_dt(dsi);
-	if (err < 0)
-		return err;
 
 	err = tegra_output_probe(&dsi->output);
 	if (err < 0)
@@ -1473,7 +1447,6 @@ static int tegra_dsi_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, dsi);
-	tegra_dsi_add(dsi);
 
 	return 0;
 }
@@ -1482,8 +1455,6 @@ static int tegra_dsi_remove(struct platform_device *pdev)
 {
 	struct tegra_dsi *dsi = platform_get_drvdata(pdev);
 	int err;
-
-	tegra_dsi_del(dsi);
 
 	err = host1x_client_unregister(&dsi->client);
 	if (err < 0) {
