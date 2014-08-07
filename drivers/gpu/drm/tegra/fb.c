@@ -300,6 +300,7 @@ static struct tegra_fbdev *tegra_fbdev_create(struct drm_device *drm)
 	}
 
 	fbdev->base.funcs = &tegra_fb_helper_funcs;
+	fbdev->base.dev = drm;
 	helper = &fbdev->base;
 
 	return fbdev;
