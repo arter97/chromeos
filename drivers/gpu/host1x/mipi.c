@@ -80,7 +80,8 @@ static const struct module {
 struct tegra_mipi {
 	void __iomem *regs;
 	struct mutex lock;
-	struct clk *clk;
+	struct clk *clk_parent;
+	struct clk *clk_mipi_cal;
 };
 
 struct tegra_mipi_device {
@@ -181,9 +182,15 @@ int tegra_mipi_calibrate(struct tegra_mipi_device *device)
 	unsigned int i;
 	int err;
 
-	err = clk_enable(device->mipi->clk);
+	err = clk_enable(device->mipi->clk_mipi_cal);
 	if (err < 0)
 		return err;
+
+	if (device->mipi->clk_parent) {
+		err = clk_enable(device->mipi->clk_parent);
+		if (err < 0)
+			goto out_clk_mipi_cal;
+	}
 
 	mutex_lock(&device->mipi->lock);
 
@@ -213,7 +220,12 @@ int tegra_mipi_calibrate(struct tegra_mipi_device *device)
 	err = tegra_mipi_wait(device->mipi);
 
 	mutex_unlock(&device->mipi->lock);
-	clk_disable(device->mipi->clk);
+
+	if (device->mipi->clk_parent)
+		clk_disable(device->mipi->clk_parent);
+
+out_clk_mipi_cal:
+	clk_disable(device->mipi->clk_mipi_cal);
 
 	return err;
 }
@@ -236,26 +248,42 @@ static int tegra_mipi_probe(struct platform_device *pdev)
 
 	mutex_init(&mipi->lock);
 
-	mipi->clk = devm_clk_get(&pdev->dev, NULL);
-	if (IS_ERR(mipi->clk)) {
+	mipi->clk_mipi_cal = devm_clk_get(&pdev->dev, "mipi-cal");
+	if (IS_ERR(mipi->clk_mipi_cal)) {
 		dev_err(&pdev->dev, "failed to get clock\n");
-		return PTR_ERR(mipi->clk);
+		return PTR_ERR(mipi->clk_mipi_cal);
 	}
 
-	err = clk_prepare(mipi->clk);
+	mipi->clk_parent = devm_clk_get(&pdev->dev, "parent");
+	if (IS_ERR(mipi->clk_parent))
+		mipi->clk_parent = NULL;
+
+	err = clk_prepare(mipi->clk_mipi_cal);
 	if (err < 0)
 		return err;
+
+	if (mipi->clk_parent) {
+		err = clk_prepare(mipi->clk_parent);
+		if (err < 0)
+			goto err;
+	}
 
 	platform_set_drvdata(pdev, mipi);
 
 	return 0;
+err:
+	clk_unprepare(mipi->clk_mipi_cal);
+
+	return err;
 }
 
 static int tegra_mipi_remove(struct platform_device *pdev)
 {
 	struct tegra_mipi *mipi = platform_get_drvdata(pdev);
 
-	clk_unprepare(mipi->clk);
+	if (mipi->clk_parent)
+		clk_unprepare(mipi->clk_parent);
+	clk_unprepare(mipi->clk_mipi_cal);
 
 	return 0;
 }

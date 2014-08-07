@@ -5,8 +5,11 @@ Required properties:
 - reg: Physical base address and length of the controller's registers.
 - clocks: Must contain an entry for each entry in clock-names.
   See ../clocks/clock-bindings.txt for details.
-- clock-names: Must include the following entries:
-  - mipi-cal
+- clock-names: Include the following entries:
+  - REQUIRED CLOCKS:
+    - mipi-cal
+  - OPTIONAL CLOCKS:
+    - parent
 - #nvidia,mipi-calibrate-cells: Should be 1. The cell is a bitmask of the pads
   that need to be calibrated for a given device.
 
@@ -19,8 +22,9 @@ Example:
 	mipi: mipi@700e3000 {
 		compatible = "nvidia,tegra114-mipi";
 		reg = <0x700e3000 0x100>;
-		clocks = <&tegra_car TEGRA114_CLK_MIPI_CAL>;
-		clock-names = "mipi-cal";
+		clocks = <&tegra_car TEGRA114_CLK_MIPI_CAL>,
+			 <&tegra_car TEGRA114_CLK_PLL_P_OUT3>;
+		clock-names = "mipi-cal", "parent";
 		#nvidia,mipi-calibrate-cells = <1>;
 	};
 
