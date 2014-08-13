@@ -897,6 +897,10 @@ found:
 	pipe_config->pipe_bpp = bpp;
 	pipe_config->port_clock = drm_dp_bw_code_to_link_rate(intel_dp->link_bw);
 
+	if (intel_dp->lane_count < max_lane_count)
+		pr_warn("DPout: lane_count %d < %d max_lane_count\n",
+			intel_dp->lane_count, max_lane_count);
+
 	DRM_DEBUG_KMS("DP link bw %02x lane count %d clock %d bpp %d\n",
 		      intel_dp->link_bw, intel_dp->lane_count,
 		      pipe_config->port_clock, bpp);
