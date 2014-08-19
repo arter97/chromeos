@@ -1,8 +1,8 @@
 /*
  * rt5677.h  --  RT5677 ALSA SoC audio driver
  *
- * Copyright 2013 Realtek Semiconductor Corp.
- * Author: Oder Chiou <oder_chiou@realtek.com>
+ * Copyright 2011 Realtek Microelectronics
+ * Author: Johnny Hsu <johnnyhsu@realtek.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -12,18 +12,18 @@
 #ifndef __RT5677_H__
 #define __RT5677_H__
 
-#include <sound/rt5677.h>
+#define RT5677_DEVICE_ID 0x6327
 
 /* Info */
-#define RT5677_RESET				0x00
+#define RT5677_RESET				0x00	/* DSP_OP_CODE */
 #define RT5677_VENDOR_ID			0xfd
 #define RT5677_VENDOR_ID1			0xfe
 #define RT5677_VENDOR_ID2			0xff
 /*  I/O - Output */
-#define RT5677_LOUT1				0x01
+#define RT5677_LOUT1				0x01	/* DSP_I2C_ADDR1 */
 /* I/O - Input */
-#define RT5677_IN1				0x03
-#define RT5677_MICBIAS				0x04
+#define RT5677_IN1				0x03	/* DSP_I2C_DATA1 */
+#define RT5677_MICBIAS				0x04	/* DSP_I2C_DATA2 */
 /* I/O - SLIMBus */
 #define RT5677_SLIMBUS_PARAM			0x07
 #define RT5677_SLIMBUS_RX			0x08
@@ -1393,6 +1393,9 @@
 #define RT5677_DSP_IB_9_L			(0x1 << 1)
 #define RT5677_DSP_IB_9_L_SFT			1
 
+/* Debug String Length */
+#define RT5677_REG_DISP_LEN 12
+
 /* System Clock Source */
 enum {
 	RT5677_SCLK_S_MCLK,
@@ -1418,11 +1421,26 @@ enum {
 	RT5677_AIFS,
 };
 
+enum {
+	RT5677_VAD_OFF,
+	RT5677_VAD_IDLE,
+	RT5677_VAD_SUSPEND,
+};
+
+struct rt5677_pll_code {
+	bool m_bp; /* Indicates bypass m code or not. */
+	bool k_bp; /* Indicates bypass k code or not. */
+	int m_code;
+	int n_code;
+	int k_code;
+};
+
 struct rt5677_priv {
 	struct snd_soc_codec *codec;
-	struct rt5677_platform_data pdata;
 	struct regmap *regmap;
+	struct mutex index_lock;
 
+	int aif_pu;
 	int sysclk;
 	int sysclk_src;
 	int lrck[RT5677_AIFS];
@@ -1431,6 +1449,7 @@ struct rt5677_priv {
 	int pll_src;
 	int pll_in;
 	int pll_out;
+	int vad_mode;
 };
 
 #endif /* __RT5677_H__ */
