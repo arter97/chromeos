@@ -1227,6 +1227,7 @@ static int rt5677_tdm1_get(struct snd_kcontrol *kcontrol,
 	unsigned int value;
 
 	regmap_read(rt5677->regmap, RT5677_TDM1_CTRL1, &value);
+
 	if ((value & 0xc0) == 0xc0)
 		ucontrol->value.integer.value[0] = 2;
 	else if ((value & 0xc0) == 0x80)
