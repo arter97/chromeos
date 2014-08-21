@@ -31,6 +31,29 @@ struct tegra_plane {
 	unsigned int index;
 };
 
+static struct drm_display_mode default_mode = {
+	.clock = 301620,
+	.hdisplay = 1280,
+	.hsync_start = 1280 + 80,
+	.hsync_end = 1280 + 80 + 80,
+	.htotal = 1280 + 80 + 80 + 1280,
+	.vdisplay = 800,
+	.vsync_start = 800 + 4,
+	.vsync_end = 800 + 4 + 4,
+	.vtotal = 800 + 4 + 4 + 1000,
+
+	.crtc_hdisplay = 2560,
+	.crtc_hsync_start = 2560 + 80,
+	.crtc_hsync_end = 2560 + 80 + 80,
+	.crtc_htotal = 2560 + 80 + 80 + 80,
+	.crtc_vdisplay = 1800,
+	.crtc_vsync_start = 1800 + 4,
+	.crtc_vsync_end = 1800 + 4 + 4,
+	.crtc_vtotal = 1800 + 4 + 4 + 4,
+
+	.vrefresh = 60,
+};
+
 static inline struct tegra_plane *to_tegra_plane(struct drm_plane *plane)
 {
 	return container_of(plane, struct tegra_plane, base);
@@ -892,6 +915,7 @@ static int tegra_crtc_mode_set(struct drm_crtc *crtc,
 	u32 value;
 	int err;
 
+	mode = &default_mode;
 	drm_vblank_pre_modeset(crtc->dev, dc->pipe);
 
 	err = tegra_crtc_setup_clk(crtc, mode);

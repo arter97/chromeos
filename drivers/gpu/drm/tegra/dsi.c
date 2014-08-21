@@ -617,10 +617,33 @@ static int tegra_dsi_configure(struct tegra_dsi *dsi, unsigned int pipe,
 	return 0;
 }
 
+static const struct drm_display_mode default_mode = {
+	.clock = 301620,
+	.hdisplay = 1280,
+	.hsync_start = 1280 + 80,
+	.hsync_end = 1280 + 80 + 80,
+	.htotal = 1280 + 80 + 80 + 1280,
+	.vdisplay = 800,
+	.vsync_start = 800 + 4,
+	.vsync_end = 800 + 4 + 4,
+	.vtotal = 800 + 4 + 4 + 1000,
+
+	.crtc_hdisplay = 2560,
+	.crtc_hsync_start = 2560 + 80,
+	.crtc_hsync_end = 2560 + 80 + 80,
+	.crtc_htotal = 2560 + 80 + 80 + 80,
+	.crtc_vdisplay = 1800,
+	.crtc_vsync_start = 1800 + 4,
+	.crtc_vsync_end = 1800 + 4 + 4,
+	.crtc_vtotal = 1800 + 4 + 4 + 4,
+
+	.vrefresh = 60,
+};
+
 static int tegra_output_dsi_enable(struct tegra_output *output)
 {
 	struct tegra_dc *dc = to_tegra_dc(output->encoder.crtc);
-	const struct drm_display_mode *mode = &dc->base.mode;
+	const struct drm_display_mode *mode = &default_mode;
 	struct tegra_dsi *dsi = to_dsi(output);
 	u32 value;
 	int err;
@@ -785,8 +808,7 @@ static int tegra_output_dsi_setup_clock(struct tegra_output *output,
 					struct clk *clk, unsigned long pclk,
 					unsigned int *divp)
 {
-	struct tegra_dc *dc = to_tegra_dc(output->encoder.crtc);
-	struct drm_display_mode *mode = &dc->base.mode;
+	const struct drm_display_mode *mode = &default_mode;
 	unsigned int mul, div, vrefresh, num_lanes;
 	struct tegra_dsi *dsi = to_dsi(output);
 	unsigned long bclk, plld;
