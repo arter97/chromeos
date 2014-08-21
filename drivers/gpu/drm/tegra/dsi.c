@@ -559,7 +559,6 @@ static int tegra_dsi_configure(struct tegra_dsi *dsi, unsigned int pipe,
 		/* TODO: implement ganged mode */
 	} else {
 		u16 bytes;
-
 		if (dsi->ganged_mode) {
 			/*
 			 * For ganged mode, assume symmetric left-right mode.
@@ -610,9 +609,9 @@ static int tegra_dsi_configure(struct tegra_dsi *dsi, unsigned int pipe,
 		 * TODO: Support modes other than symmetrical left-right
 		 * split.
 		 */
-		tegra_dsi_ganged_enable(dsi, 0, mode->crtc_hdisplay / 2);
-		tegra_dsi_ganged_enable(dsi->slave, mode->crtc_hdisplay / 2,
+		tegra_dsi_ganged_enable(dsi, mode->crtc_hdisplay / 2,
 					mode->crtc_hdisplay / 2);
+		tegra_dsi_ganged_enable(dsi->slave, 0, mode->crtc_hdisplay / 2);
 	}
 
 	return 0;
