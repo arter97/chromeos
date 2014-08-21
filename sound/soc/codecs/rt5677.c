@@ -4451,6 +4451,12 @@ static ssize_t rt5677_codec_store(struct device *dev,
 }
 static DEVICE_ATTR(codec_reg, 0666, rt5677_codec_show, rt5677_codec_store);
 
+static struct regmap *rt5677_get_regmap(struct device *dev)
+{
+	struct rt5677_priv *rt5677 = dev_get_drvdata(dev);
+	return rt5677->regmap;
+}
+
 static int rt5677_set_bias_level(struct snd_soc_codec *codec,
 			enum snd_soc_bias_level level)
 {
@@ -4527,12 +4533,6 @@ static int rt5677_probe(struct snd_soc_codec *codec)
 	int ret;
 
 	pr_info("Codec driver version %s\n", VERSION);
-
-	ret = snd_soc_codec_set_cache_io(codec, 8, 16, SND_SOC_REGMAP);
-	if (ret != 0) {
-		dev_err(codec->dev, "Failed to set cache I/O: %d\n", ret);
-		return ret;
-	}
 
 	regmap_read(rt5677->regmap, RT5677_VENDOR_ID2, &ret);
 	if (ret != RT5677_DEVICE_ID) {
@@ -4731,6 +4731,7 @@ static struct snd_soc_codec_driver soc_codec_dev_rt5677 = {
 	.remove = rt5677_remove,
 	.suspend = rt5677_suspend,
 	.resume = rt5677_resume,
+	.get_regmap = rt5677_get_regmap,
 	.set_bias_level = rt5677_set_bias_level,
 	.idle_bias_off = true,
 	.controls = rt5677_snd_controls,
