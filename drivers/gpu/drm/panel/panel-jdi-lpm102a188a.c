@@ -231,6 +231,71 @@ static int panel_jdi_disable(struct drm_panel *panel)
 	return 0;
 }
 
+struct touch_calibration_dcs_cmd {
+	u8 command;
+	u8 data[32];
+	int data_len;
+};
+
+static const struct touch_calibration_dcs_cmd cal_cmds[] = {
+	{
+		.command = 0xB0,
+		.data = { 0x04 },
+		.data_len = 0,
+	}, {
+		.command = 0xED,
+		.data = {
+			0x4D, 0x00, 0x27, 0x11, 0x00, 0x83, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x4B, 0x00, 0x24, 0x27, 0x00,
+			0xC1, 0x00, 0xC0, 0x06, 0x14, 0x00, 0x00, 0x00,
+			0xC7, 0x17, 0x18, 0x4E, 0x00, 0x00, 0x00
+		},
+		.data_len = 31,
+	}, {
+		.command = 0xEE,
+		.data = {
+			0x26, 0x00, 0x00, 0x10, 0x00, 0x02, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x24, 0x00, 0x27, 0x27, 0x01,
+			0x8B, 0x01, 0x8A, 0x0C, 0x63, 0x00, 0x00, 0x00,
+			0xA0, 0x2E, 0x2F, 0x27, 0x00, 0x00, 0x00
+		},
+		.data_len = 31,
+	}, {
+		.command = 0xEF,
+		.data = {
+			0x74, 0x00, 0x00, 0x10, 0x00, 0x02, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x24, 0x00, 0x27, 0x27, 0x00,
+			0x7E, 0x00, 0x7D, 0x03, 0xFA, 0x00, 0x00, 0x00,
+			0xC7, 0x0F, 0x10, 0xA6, 0x00, 0x00, 0x00
+		},
+		.data_len = 31,
+	},
+};
+
+static int panel_jdi_configure_touchscreen(struct panel_jdi *jdi)
+{
+	int ret, i;
+
+	for (i = 0; i < ARRAY_SIZE(cal_cmds); i++) {
+		ret = mipi_dsi_dcs_write(jdi->dsi, cal_cmds[i].command,
+				cal_cmds[i].data, cal_cmds[i].data_len);
+		if (ret < 0) {
+			DRM_ERROR("master touch_cal_cmd failed cmd=%d,ret=%d\n",
+				cal_cmds[i].command, ret);
+			return ret;
+		}
+
+		ret = mipi_dsi_dcs_write(jdi->dsi->slave, cal_cmds[i].command,
+				cal_cmds[i].data, cal_cmds[i].data_len);
+		if (ret < 0) {
+			DRM_ERROR("slave touch_cal_cmd failed cmd=%d,ret=%d\n",
+				cal_cmds[i].command, ret);
+			return ret;
+		}
+	}
+	return 0;
+}
+
 static int panel_jdi_prepare(struct drm_panel *panel)
 {
 	struct panel_jdi *jdi = to_panel_jdi(panel);
@@ -360,6 +425,10 @@ static int panel_jdi_prepare(struct drm_panel *panel)
 		DRM_ERROR("failed to set display on: %d\n", ret);
 
 	jdi->enabled = true;
+
+	ret = panel_jdi_configure_touchscreen(jdi);
+	if (ret < 0)
+		DRM_ERROR("failed to configure touchscreen: %d\n", ret);
 
 	return ret;
 }
