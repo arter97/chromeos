@@ -534,18 +534,18 @@ static int tegra_dsi_configure(struct tegra_dsi *dsi, unsigned int pipe,
 
 	if (dsi->flags & MIPI_DSI_MODE_VIDEO) {
 		/* horizontal active pixels */
-		hact = mode->hdisplay * mul / div;
+		hact = mode->crtc_hdisplay * mul / div;
 
 		/* horizontal sync width */
-		hsw = (mode->hsync_end - mode->hsync_start) * mul / div;
+		hsw = (mode->crtc_hsync_end - mode->crtc_hsync_start) * mul / div;
 		hsw -= 10;
 
 		/* horizontal back porch */
-		hbp = (mode->htotal - mode->hsync_end) * mul / div;
+		hbp = (mode->crtc_htotal - mode->crtc_hsync_end) * mul / div;
 		hbp -= 14;
 
 		/* horizontal front porch */
-		hfp = (mode->hsync_start - mode->hdisplay) * mul / div;
+		hfp = (mode->crtc_hsync_start - mode->crtc_hdisplay) * mul / div;
 		hfp -= 8;
 
 		tegra_dsi_writel(dsi, hsw << 16 | 0, DSI_PKT_LEN_0_1);
@@ -564,10 +564,10 @@ static int tegra_dsi_configure(struct tegra_dsi *dsi, unsigned int pipe,
 			/*
 			 * For ganged mode, assume symmetric left-right mode.
 			 */
-			bytes = 1 + (mode->hdisplay / 2) * mul / div;
+			bytes = 1 + (mode->crtc_hdisplay / 2) * mul / div;
 		} else {
 			/* 1 byte (DCS command) + pixel data */
-			bytes = 1 + mode->hdisplay * mul / div;
+			bytes = 1 + mode->crtc_hdisplay * mul / div;
 		}
 
 		tegra_dsi_writel(dsi, 0, DSI_PKT_LEN_0_1);
@@ -590,7 +590,7 @@ static int tegra_dsi_configure(struct tegra_dsi *dsi, unsigned int pipe,
 			/* FIFO read delay */
 			delay = delay + 6;
 
-			bclk = DIV_ROUND_UP(mode->htotal * mul, div * lanes);
+			bclk = DIV_ROUND_UP(mode->crtc_htotal * mul, div * lanes);
 			bclk_ganged = DIV_ROUND_UP(bclk * lanes / 2, lanes);
 			value = bclk - bclk_ganged + delay + 20;
 		} else {
@@ -610,9 +610,9 @@ static int tegra_dsi_configure(struct tegra_dsi *dsi, unsigned int pipe,
 		 * TODO: Support modes other than symmetrical left-right
 		 * split.
 		 */
-		tegra_dsi_ganged_enable(dsi, 0, mode->hdisplay / 2);
-		tegra_dsi_ganged_enable(dsi->slave, mode->hdisplay / 2,
-					mode->hdisplay / 2);
+		tegra_dsi_ganged_enable(dsi, 0, mode->crtc_hdisplay / 2);
+		tegra_dsi_ganged_enable(dsi->slave, mode->crtc_hdisplay / 2,
+					mode->crtc_hdisplay / 2);
 	}
 
 	return 0;
