@@ -1,0 +1,64 @@
+TI LP8557 Backlight Driver for JDI panels
+
+Required properties:
+- reg: 7-bit i2c address
+- brightness-mode: Choose how brightness is controlled
+	- 0: PWM brightness mode
+	- 1: Brightness register mode
+	- 2: PWM x unshaped brightness register mode
+	- 3: Unshaped PWM x brightness register mode
+- step-ramp: Ramp time for 0% to 100% change
+	- 0: 0 ms
+	- 1: 50 ms
+	- 2: 100 ms
+	- 3: 200 ms
+- step-smoothing: Strength of smoothing filter
+	- 0: No smoothing
+	- 1: Light smoothing
+	- 2: Medium smoothing
+	- 3: Heavy smoothing
+
+Optional properties:
+- pwm-standby: Enable PWM standby mode after 52ms of PWM pin low
+- current: Full-scale current (use R_iset resistor if property is absent)
+	- 0: 5 mA
+	- 1: 10 mA
+	- 2: 13 mA
+	- 3: 15 mA
+	- 4: 18 mA
+	- 5: 20 mA
+	- 6: 23 mA
+	- 7: 25 mA
+- pwm-frequency: PWM output freq (use R_fset resistor if property is absent)
+	- 0: 4.9 kHz
+	- 1: 9.8 kHz
+	- 2: 14.6 kHz
+	- 3: 19.5 kHz
+	- 4: 24.4 kHz
+	- 5: 29.3 kHz
+	- 6: 34.2 kHz
+	- 7: 39.1 kHz
+- boost-frequency: Boost freq (use R_fset resistor if property is absent)
+	- 0: 500 kHz
+	- 1: 1 MHz
+- boost-bcomp: Boost compensation (use R_iset resistor if property is absent)
+	- Option 0
+	- Option 1
+- led-enable:  Array of 6 elements, each represents if the corresponding LED
+		string should be enabled (use auto-detect if property is absent)
+
+Example:
+		lp8557-backlight@2c {
+			compatible = "ti,lp8557-jdi";
+			reg = <0x2c>;
+
+			brightness-mode = <0x0>;
+			pwm-standby;
+			current = <5>;
+			pwm-frequency = <1>;
+			boost-frequency = <1>;
+			boost-bcomp = <1>;
+			led-enable = <1 1 1 1 1 1>;
+			step-ramp = <0>;
+			step-smoothing = <0>;
+		};
