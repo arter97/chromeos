@@ -1188,7 +1188,7 @@ static const SOC_ENUM_SINGLE_DECL(rt5677_vad_mode_enum, 0, 0,
 static int rt5677_vad_get(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
 	struct rt5677_priv *rt5677 = snd_soc_codec_get_drvdata(codec);
 
 	ucontrol->value.integer.value[0] = rt5677->vad_mode;
@@ -1199,7 +1199,7 @@ static int rt5677_vad_get(struct snd_kcontrol *kcontrol,
 static int rt5677_vad_put(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
 	struct rt5677_priv *rt5677 = snd_soc_codec_get_drvdata(codec);
 
 	rt5677->vad_mode = ucontrol->value.integer.value[0];
@@ -1222,7 +1222,7 @@ static const SOC_ENUM_SINGLE_DECL(rt5677_tdm1_enum, 0, 0, rt5677_tdm1_mode);
 static int rt5677_tdm1_get(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
 	struct rt5677_priv *rt5677 = snd_soc_codec_get_drvdata(codec);
 	unsigned int value;
 
@@ -1241,7 +1241,7 @@ static int rt5677_tdm1_get(struct snd_kcontrol *kcontrol,
 static int rt5677_tdm1_put(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
 	struct rt5677_priv *rt5677 = snd_soc_codec_get_drvdata(codec);
 
 	if (ucontrol->value.integer.value[0] == 0)
