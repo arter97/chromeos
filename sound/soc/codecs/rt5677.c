@@ -2430,106 +2430,6 @@ static int rt5677_lout3_event(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
-static int rt5677_set_dmic1_event(struct snd_soc_dapm_widget *w,
-	struct snd_kcontrol *kcontrol, int event)
-{
-	struct snd_soc_codec *codec = w->codec;
-	struct rt5677_priv *rt5677 = snd_soc_codec_get_drvdata(codec);
-
-	switch (event) {
-	case SND_SOC_DAPM_PRE_PMU:
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL2,
-			RT5677_DMIC_1L_LH_MASK | RT5677_DMIC_1R_LH_MASK,
-			RT5677_DMIC_1L_LH_FALLING | RT5677_DMIC_1R_LH_RISING);
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL1,
-			RT5677_DMIC_1_EN_MASK, RT5677_DMIC_1_EN);
-		break;
-	case SND_SOC_DAPM_POST_PMD:
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL1,
-			RT5677_DMIC_1_EN_MASK, RT5677_DMIC_1_DIS);
-		break;
-	default:
-		return 0;
-	}
-
-	return 0;
-}
-
-static int rt5677_set_dmic2_event(struct snd_soc_dapm_widget *w,
-	struct snd_kcontrol *kcontrol, int event)
-{
-	struct snd_soc_codec *codec = w->codec;
-	struct rt5677_priv *rt5677 = snd_soc_codec_get_drvdata(codec);
-
-	switch (event) {
-	case SND_SOC_DAPM_PRE_PMU:
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL2,
-			RT5677_DMIC_2L_LH_MASK | RT5677_DMIC_2R_LH_MASK,
-			RT5677_DMIC_2L_LH_FALLING | RT5677_DMIC_2R_LH_RISING);
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL1,
-			RT5677_DMIC_2_EN_MASK, RT5677_DMIC_2_EN);
-		break;
-	case SND_SOC_DAPM_POST_PMD:
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL1,
-			RT5677_DMIC_2_EN_MASK, RT5677_DMIC_2_DIS);
-		break;
-	default:
-		return 0;
-	}
-
-	return 0;
-}
-
-static int rt5677_set_dmic3_event(struct snd_soc_dapm_widget *w,
-	struct snd_kcontrol *kcontrol, int event)
-{
-	struct snd_soc_codec *codec = w->codec;
-	struct rt5677_priv *rt5677 = snd_soc_codec_get_drvdata(codec);
-
-	switch (event) {
-	case SND_SOC_DAPM_PRE_PMU:
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL2,
-			RT5677_DMIC_3L_LH_MASK | RT5677_DMIC_3R_LH_MASK,
-			RT5677_DMIC_3L_LH_FALLING | RT5677_DMIC_3R_LH_RISING);
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL1,
-			RT5677_DMIC_3_EN_MASK, RT5677_DMIC_3_EN);
-		break;
-	case SND_SOC_DAPM_POST_PMD:
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL1,
-			RT5677_DMIC_3_EN_MASK, RT5677_DMIC_3_DIS);
-		break;
-	default:
-		return 0;
-	}
-
-	return 0;
-}
-
-static int rt5677_set_dmic4_event(struct snd_soc_dapm_widget *w,
-	struct snd_kcontrol *kcontrol, int event)
-{
-	struct snd_soc_codec *codec = w->codec;
-	struct rt5677_priv *rt5677 = snd_soc_codec_get_drvdata(codec);
-
-	switch (event) {
-	case SND_SOC_DAPM_PRE_PMU:
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL2,
-			RT5677_DMIC_4L_LH_MASK | RT5677_DMIC_4R_LH_MASK,
-			RT5677_DMIC_4L_LH_FALLING | RT5677_DMIC_4R_LH_RISING);
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL2,
-			RT5677_DMIC_4_EN_MASK, RT5677_DMIC_4_EN);
-		break;
-	case SND_SOC_DAPM_POST_PMD:
-		regmap_update_bits(rt5677->regmap, RT5677_DMIC_CTRL2,
-			RT5677_DMIC_4_EN_MASK, RT5677_DMIC_4_DIS);
-		break;
-	default:
-		return 0;
-	}
-
-	return 0;
-}
-
 static int rt5677_bst1_event(struct snd_soc_dapm_widget *w,
 	struct snd_kcontrol *kcontrol, int event)
 {
@@ -2792,18 +2692,19 @@ static const struct snd_soc_dapm_widget rt5677_dapm_widgets[] = {
 
 	SND_SOC_DAPM_INPUT("Haptic Generator"),
 
-	SND_SOC_DAPM_PGA_E("DMIC1", SND_SOC_NOPM, 0, 0, NULL, 0,
-		rt5677_set_dmic1_event, SND_SOC_DAPM_PRE_PMU |
-		SND_SOC_DAPM_POST_PMD),
-	SND_SOC_DAPM_PGA_E("DMIC2", SND_SOC_NOPM, 0, 0, NULL, 0,
-		rt5677_set_dmic2_event, SND_SOC_DAPM_PRE_PMU |
-		SND_SOC_DAPM_POST_PMD),
-	SND_SOC_DAPM_PGA_E("DMIC3", SND_SOC_NOPM, 0, 0, NULL, 0,
-		rt5677_set_dmic3_event, SND_SOC_DAPM_PRE_PMU |
-		SND_SOC_DAPM_POST_PMD),
-	SND_SOC_DAPM_PGA_E("DMIC4", SND_SOC_NOPM, 0, 0, NULL, 0,
-		rt5677_set_dmic4_event, SND_SOC_DAPM_PRE_PMU |
-		SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_PGA("DMIC1", SND_SOC_NOPM, 0, 0, NULL, 0),
+	SND_SOC_DAPM_PGA("DMIC2", SND_SOC_NOPM, 0, 0, NULL, 0),
+	SND_SOC_DAPM_PGA("DMIC3", SND_SOC_NOPM, 0, 0, NULL, 0),
+	SND_SOC_DAPM_PGA("DMIC4", SND_SOC_NOPM, 0, 0, NULL, 0),
+
+	SND_SOC_DAPM_SUPPLY("DMIC1 power", RT5677_DMIC_CTRL1,
+		RT5677_DMIC_1_EN_SFT, 0, NULL, 0),
+	SND_SOC_DAPM_SUPPLY("DMIC2 power", RT5677_DMIC_CTRL1,
+		RT5677_DMIC_2_EN_SFT, 0, NULL, 0),
+	SND_SOC_DAPM_SUPPLY("DMIC3 power", RT5677_DMIC_CTRL1,
+		RT5677_DMIC_3_EN_SFT, 0, NULL, 0),
+	SND_SOC_DAPM_SUPPLY("DMIC4 power", RT5677_DMIC_CTRL2,
+		RT5677_DMIC_4_EN_SFT, 0, NULL, 0),
 
 	SND_SOC_DAPM_SUPPLY("DMIC CLK", SND_SOC_NOPM, 0, 0,
 		set_dmic_clk, SND_SOC_DAPM_PRE_PMU),
@@ -3252,6 +3153,15 @@ static const struct snd_soc_dapm_route rt5677_dapm_routes[] = {
 	{ "DMIC R3", NULL, "DMIC CLK" },
 	{ "DMIC L4", NULL, "DMIC CLK" },
 	{ "DMIC R4", NULL, "DMIC CLK" },
+
+	{ "DMIC L1", NULL, "DMIC1 power" },
+	{ "DMIC R1", NULL, "DMIC1 power" },
+	{ "DMIC L2", NULL, "DMIC1 power" },
+	{ "DMIC R2", NULL, "DMIC1 power" },
+	{ "DMIC L3", NULL, "DMIC3 power" },
+	{ "DMIC R3", NULL, "DMIC3 power" },
+	{ "DMIC L4", NULL, "DMIC4 power" },
+	{ "DMIC R4", NULL, "DMIC4 power" },
 
 	{ "BST1", NULL, "IN1P" },
 	{ "BST1", NULL, "IN1N" },
