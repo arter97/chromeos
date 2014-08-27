@@ -26,6 +26,37 @@
 		nvidia,pmc-wakeup = <&pmc 1 16 4>;
 	};
 
+	host1x@50000000 {
+		dsi@54300000 {
+			status = "okay";
+
+			panel: panel@0 {
+				compatible = "jdi,lpm102a188a";
+
+				reg = <0 0 0>;
+
+				power-supply = <&pplcd_vdd>;
+				ddi-supply = <&pp1800_lcdio>;
+
+				enable-gpio = <&gpio TEGRA_GPIO(H, 5) GPIO_ACTIVE_HIGH>;
+				reset-gpio = <&gpio TEGRA_GPIO(H, 3) GPIO_ACTIVE_LOW>;
+				backlight = <&backlight>;
+			};
+		};
+
+		dsi@54400000 {
+			status = "okay";
+
+			panel@0 {
+				compatible = "jdi,lpm102a188a";
+
+				reg = <0 0 0>;
+
+				master = <&panel>;
+			};
+		};
+	};
+
 	// I2C1 (GEN1_I2C)
 	i2c@7000c000 {
 		status = "okay";
@@ -294,6 +325,20 @@
 	i2c@7000d100 {
 		status = "okay";
 		clock-frequency = <400000>;
+
+		backlight: lp8557-backlight@2c {
+			compatible = "ti,lp8557-jdi";
+			reg = <0x2c>;
+
+			brightness-mode = <0x0>;
+			current = <5>;
+			pwm-frequency = <1>;
+			boost-frequency = <1>;
+			boost-bcomp = <1>;
+			led-enable = <1 1 1 1 1 1>;
+			step-ramp = <0>;
+			step-smoothing = <0>;
+		};
 
 		tmp451: temperature-sensor@4c {
 			compatible = "ti,tmp451";
