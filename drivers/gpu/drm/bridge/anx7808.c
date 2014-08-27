@@ -1779,17 +1779,19 @@ out:
 	return num_modes;
 }
 
-int exynos_hdmi_encoder_mode_valid(struct drm_encoder *encoder,
-					struct drm_connector *connector,
-					struct drm_display_mode *mode);
-
 int anx7808_mode_valid(struct drm_connector *connector,
 		struct drm_display_mode *mode)
 {
 	struct anx7808_data *anx7808 = container_of(connector,
 				struct anx7808_data, connector);
 	struct drm_encoder *encoder = anx7808->encoder;
-	return exynos_hdmi_encoder_mode_valid(encoder, connector, mode);
+	struct drm_encoder_helper_funcs *encoder_funcs =
+				encoder->helper_private;
+
+	if (encoder_funcs && encoder_funcs->mode_valid)
+		return encoder_funcs->mode_valid(encoder, mode);
+
+	return MODE_OK;
 }
 
 struct drm_encoder *anx7808_best_encoder(struct drm_connector *connector)
