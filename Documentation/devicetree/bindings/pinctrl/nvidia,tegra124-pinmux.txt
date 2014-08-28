@@ -91,6 +91,12 @@ Valid values for pin and group names are:
     dbg, sdio3, spi, uaa, uab, uart2, uart3, sdio1, ddc, gma, gme, gmf, gmg,
     gmh, owr, uda, gpv, dev3, cec, usb_vbus_en, ao3, ao0, hv0, sdio4, ao4.
 
+  apb groups:
+
+    These do not support any of the optional properties.
+
+    dsi_b
+
 Valid values for nvidia,functions are:
 
   blink, cec, cldvfs, clk12, cpu, dap, dap1, dap2, dev3, displaya,
@@ -101,14 +107,15 @@ Valid values for nvidia,functions are:
   sdmmc4, soc, spdif, spi1, spi2, spi3, spi4, spi5, spi6, trace, uarta,
   uartb, uartc, uartd, ulpi, usb, vgp1, vgp2, vgp3, vgp4, vgp5, vgp6,
   vi, vi_alt1, vi_alt3, vimclk2, vimclk2_alt, sata, ccla, pe0, pe, pe1,
-  dp, rtck, sys, clk tmds.
+  dp, rtck, sys, clk tmds. csi, dsi_b
 
 Example:
 
 	pinmux: pinmux {
 		compatible = "nvidia,tegra124-pinmux";
 		reg = <0x70000868 0x164		/* Pad control registers */
-		       0x70003000 0x434>;	/* PinMux registers */
+		       0x70003000 0x434		/* PinMux registers */
+		       0x70000820 0x8>;		/* APB misc registers */
 	};
 
 Example pinmux entries:
