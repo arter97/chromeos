@@ -1262,6 +1262,10 @@ static const struct snd_kcontrol_new rt5677_snd_controls[] = {
 		RT5677_LOUT2_L_MUTE_SFT, 1, 1),
 	SOC_SINGLE("OUT3 Playback Switch", RT5677_LOUT1,
 		RT5677_LOUT3_L_MUTE_SFT, 1, 1),
+	SOC_SINGLE("PDM1L Playback Switch", RT5677_PDM_OUT_CTRL,
+		RT5677_M_PDM1_L_SFT, 1, 1),
+	SOC_SINGLE("PDM1R Playback Switch", RT5677_PDM_OUT_CTRL,
+		RT5677_M_PDM1_R_SFT, 1, 1),
 
 	/* DAC Digital Volume */
 	SOC_DOUBLE_TLV("DAC1 Playback Volume", RT5677_DAC1_DIG_VOL,
