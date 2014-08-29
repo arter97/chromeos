@@ -4485,6 +4485,19 @@ static int rt5677_probe(struct snd_soc_codec *codec)
 	/* HP_AMP_SHDN_L: drive GPIO2 high */
 	regmap_write(rt5677->regmap, RT5677_GPIO_CTRL2, (1<<4) | (1<<5));
 
+	/* Enable I2S1 ASRC Function */
+	regmap_write(rt5677->regmap, RT5677_ASRC_1, 0x0001);
+	/*
+	 * Enable DAC ASRC for Stereo DAC
+	 * Enable DMIC ASRC for Stereo1 ADC
+	 * Enable ADC ASRC for Stereo1
+	 */
+	regmap_write(rt5677->regmap, RT5677_ASRC_2, 0x4820);
+	/* ASRC Clock Source for Stereo DAC = clk_i2s1_asrc */
+	regmap_write(rt5677->regmap, RT5677_ASRC_3, 0x1000);
+	/* ASRC Clock Source for Stereo1 ADC = clk_i2s1_asrc */
+	regmap_write(rt5677->regmap, RT5677_ASRC_5, 0x1000);
+
 	return 0;
 }
 
