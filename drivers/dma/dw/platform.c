@@ -390,7 +390,12 @@ static void dw_shutdown(struct platform_device *pdev)
 {
 	struct dw_dma_chip *chip = platform_get_drvdata(pdev);
 
+#if 1
+	/* HACK: avoid soft lockup during shutdown */
+	printk("SNSN: dw_shutdown: Bailing!!!!\n");
+#else
 	dw_dma_shutdown(chip);
+#endif
 }
 
 #ifdef CONFIG_OF
