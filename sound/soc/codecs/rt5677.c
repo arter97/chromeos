@@ -3103,28 +3103,21 @@ static const struct snd_soc_dapm_widget rt5677_dapm_widgets[] = {
 	SND_SOC_DAPM_SUPPLY("PDM2 Power", RT5677_PWR_DIG2,
 		RT5677_PWR_PDM2_BIT, 0, NULL, 0),
 
-	SND_SOC_DAPM_MUX_E("PDM1 L Mux", SND_SOC_NOPM, 0, 0,
-		&rt5677_pdm1_l_mux, rt5677_pdm1_l_event,
-		SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMU),
-	SND_SOC_DAPM_MUX_E("PDM1 R Mux", SND_SOC_NOPM, 0, 0,
-		&rt5677_pdm1_r_mux, rt5677_pdm1_r_event,
-		SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMU),
-	SND_SOC_DAPM_MUX_E("PDM2 L Mux", SND_SOC_NOPM, 0, 0,
-		&rt5677_pdm2_l_mux, rt5677_pdm2_l_event,
-		SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMU),
-	SND_SOC_DAPM_MUX_E("PDM2 R Mux", SND_SOC_NOPM, 0, 0,
-		&rt5677_pdm2_r_mux, rt5677_pdm2_r_event,
-		SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMU),
+	SND_SOC_DAPM_MUX("PDM1 L Mux", SND_SOC_NOPM, 0, 0,
+		&rt5677_pdm1_l_mux),
+	SND_SOC_DAPM_MUX("PDM1 R Mux", SND_SOC_NOPM, 0, 0,
+		&rt5677_pdm1_r_mux),
+	SND_SOC_DAPM_MUX("PDM2 L Mux", SND_SOC_NOPM, 0, 0,
+		&rt5677_pdm2_l_mux),
+	SND_SOC_DAPM_MUX("PDM2 R Mux", SND_SOC_NOPM, 0, 0,
+		&rt5677_pdm2_r_mux),
 
 	SND_SOC_DAPM_PGA_S("LOUT1 amp", 1, RT5677_PWR_ANLG1, RT5677_PWR_LO1_BIT,
-		0, rt5677_lout1_event, SND_SOC_DAPM_PRE_PMD |
-		SND_SOC_DAPM_POST_PMU),
+		0, NULL, 0),
 	SND_SOC_DAPM_PGA_S("LOUT2 amp", 1, RT5677_PWR_ANLG1, RT5677_PWR_LO2_BIT,
-		0, rt5677_lout2_event, SND_SOC_DAPM_PRE_PMD |
-		SND_SOC_DAPM_POST_PMU),
+		0, NULL, 0),
 	SND_SOC_DAPM_PGA_S("LOUT3 amp", 1, RT5677_PWR_ANLG1, RT5677_PWR_LO3_BIT,
-		0, rt5677_lout3_event, SND_SOC_DAPM_PRE_PMD |
-		SND_SOC_DAPM_POST_PMU),
+		0, NULL, 0),
 
 	/* Output Lines */
 	SND_SOC_DAPM_OUTPUT("LOUT1"),
