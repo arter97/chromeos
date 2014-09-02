@@ -1770,7 +1770,12 @@ int dw_dma_suspend(struct dw_dma_chip *chip)
 {
 	struct dw_dma *dw = chip->dw;
 
+#if 1
+	/* HACK: avoid soft lockup during suspend */
+	printk("SNSN: dw_dma_suspend: Bailing!!!!\n");
+#else
 	dw_dma_off(dw);
+#endif
 	clk_disable_unprepare(dw->clk);
 
 	return 0;
