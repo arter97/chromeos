@@ -23,6 +23,8 @@
 #include <linux/of_device.h>
 #include <linux/clk.h>
 #include <linux/io.h>
+#include <linux/reset.h>
+#include <linux/delay.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/host1x.h>
@@ -103,6 +105,7 @@ static int host1x_probe(struct platform_device *pdev)
 	struct resource *regs;
 	int syncpt_irq;
 	int err;
+	struct reset_control *rst;
 
 	id = of_match_device(host1x_of_match, &pdev->dev);
 	if (!id)
@@ -150,6 +153,18 @@ static int host1x_probe(struct platform_device *pdev)
 		return err;
 	}
 
+	rst = devm_reset_control_get(&pdev->dev, "host1x");
+	if (IS_ERR(rst))
+		return PTR_ERR(rst);
+
+	dev_info(&pdev->dev, "Assert host1x reset\n");
+	err = reset_control_assert(rst);
+	if (err < 0) {
+		dev_err(&pdev->dev, "failed to assert reset: %d\n", err);
+		return err;
+	}
+	msleep(20);
+
 	err = host1x_channel_list_init(host);
 	if (err) {
 		dev_err(&pdev->dev, "failed to initialize channel list\n");
@@ -161,6 +176,14 @@ static int host1x_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to enable clock\n");
 		return err;
 	}
+
+	dev_info(&pdev->dev, "Deassert host1x reset\n");
+	err = reset_control_deassert(rst);
+	if (err < 0) {
+		dev_err(&pdev->dev, "failed to deassert reset: %d\n", err);
+		return err;
+	}
+	msleep(20);
 
 	err = host1x_syncpt_init(host);
 	if (err) {
