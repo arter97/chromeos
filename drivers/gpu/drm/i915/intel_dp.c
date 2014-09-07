@@ -3364,7 +3364,7 @@ intel_dp_set_property(struct drm_connector *connector,
 	}
 
 	if (is_edp(intel_dp) && property == dev_priv->psr_property) {
-		if (val == EDP_PSR_ON) {
+		if (val == EDP_PSR_ON && i915_enable_psr != 0) {
 			i915_enable_psr = 1;
 			intel_edp_psr_enable(intel_dp);
 		} else {
