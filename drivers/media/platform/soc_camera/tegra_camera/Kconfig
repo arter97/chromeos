@@ -1,0 +1,16 @@
+choice
+	prompt "Tegra soc_camera host driver"
+	optional
+	default TEGRA_VI2
+	help
+	   This option allows the selection of the camera implementation
+	   for Tegra
+
+config VIDEO_TEGRA_VI2
+	tristate "Tegra soc_camera host VI2 driver"
+	depends on VIDEO_DEV && ARCH_TEGRA && SOC_CAMERA && HAS_DMA && HAVE_CLK
+	select VIDEOBUF2_DMA_CONTIG
+	---help---
+	  This is the v4l2 driver for the VI2-style Tegra camera interface
+
+endchoice
