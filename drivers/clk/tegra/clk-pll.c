@@ -1390,6 +1390,125 @@ static struct clk *_tegra_clk_register_pll(struct tegra_clk_pll *pll,
 	return clk_register(NULL, &pll->hw);
 }
 
+struct pllpad_dividers {
+	u32	n : 10;
+	u32	m : 5;
+	u32	: 3;
+	u32	p : 3;
+	u32	: 1;
+	u32	cpcon : 4;
+	u32	: 6;
+};
+
+static void init_plld(struct tegra_clk_pll_params *pll_params,
+			void __iomem *clk_base)
+{
+	/**
+	 * plld (fo) = vco >> p, where 500MHz < vco < 1000MHz
+	 *           = (cf * n) >> p, where 1MHz < cf < 6MHz
+	 *           = ((ref / m) * n) >> p
+	 *
+	 * Iterate the possible values of p (3 bits, 2^7) to find out a minimum
+	 * safe vco, then find best (m, n). since m has only 5 bits, we can
+	 * iterate all possible values.  Note Tegra 124 supports 11 bits for n,
+	 * but our pll_fields has only 10 bits for n.
+	 *
+	 * Note values undershoot or overshoot target output frequency may not
+	 * work if the values are not in "safe" range by panel specification.
+	 */
+	struct pllpad_dividers plld = { 0 };
+	u32 ref = 12000000, m, n, p = 0;
+	u32 frequency = 301620 * 1000 * 2;
+	u32 cf, vco, rounded_rate = frequency;
+	u32 diff, best_diff;
+	const u32 max_m = 1 << 5, max_n = 1 << 10, max_p = 1 << 3,
+		  mhz = 1000 * 1000, min_vco = 500 * mhz, max_vco = 1000 * mhz,
+		  min_cf = 1 * mhz, max_cf = 6 * mhz;
+	u32 dividers, misc_con;
+	int i;
+
+	for (vco = frequency; vco < min_vco && p < max_p; p++)
+		vco <<= 1;
+
+	if (vco < min_vco || vco > max_vco) {
+		pr_err("%s: Cannot find out a supported VCO"
+			" for Frequency (%u).\n", __func__, frequency);
+		return;
+	}
+
+	plld.p = p;
+	best_diff = vco;
+
+	for (m = 1; m < max_m && best_diff; m++) {
+		cf = ref / m;
+		if (cf < min_cf)
+			break;
+		if (cf > max_cf)
+			continue;
+
+		n = vco / cf;
+		if (n >= max_n)
+			continue;
+
+		diff = vco - n * cf;
+		if (n + 1 < max_n && diff > cf / 2) {
+			n++;
+			diff = cf - diff;
+		}
+
+		if (diff >= best_diff)
+			continue;
+
+		best_diff = diff;
+		plld.m = m;
+		plld.n = n;
+	}
+
+	if (plld.n < 50)
+		plld.cpcon = 2;
+	else if (plld.n < 300)
+		plld.cpcon = 3;
+	else if (plld.n < 600)
+		plld.cpcon = 8;
+	else
+		plld.cpcon = 12;
+
+	if (best_diff) {
+		pr_err( "%s: Failed to match output frequency %u, "
+		       "best difference is %u.\n", __func__, frequency,
+		       best_diff);
+		rounded_rate = (ref / plld.m * plld.n) >> plld.p;
+	}
+
+	pr_err("%s: PLLD=%u ref=%u, m/n/p/cpcon=%u/%u/%u/%u\n",
+	       __func__, rounded_rate, ref, plld.m, plld.n, plld.p, plld.cpcon);
+
+	dividers =  plld.n << PLL_BASE_DIVN_SHIFT |
+			plld.m << PLL_BASE_DIVM_SHIFT |
+			plld.p << PLL_BASE_DIVP_SHIFT;
+	misc_con = plld.cpcon << PLL_MISC_CPCON_SHIFT;
+
+	/* Write dividers but BYPASS the PLL while we're messing with it. */
+	writel_relaxed(dividers | PLL_BASE_BYPASS,
+		clk_base + pll_params->base_reg);
+	/*
+	 * Set Lock bit, CPCON and LFCON fields (default to 0 if it doesn't
+	 * exist for this PLL)
+	 */
+	writel_relaxed((1 << 22) | (1 << 30) | misc_con,
+			clk_base + pll_params->misc_reg);
+
+	/* Enable PLL and take it back out of BYPASS */
+	writel_relaxed(dividers | PLL_BASE_ENABLE,
+		clk_base + pll_params->base_reg);
+
+	/* Wait for lock ready */
+	for (i = 0; i < 10000; i++) {
+		if (readl_relaxed(clk_base + pll_params->base_reg) & (1 << 27))
+			break;
+	}
+}
+
 struct clk *tegra_clk_register_pll(const char *name, const char *parent_name,
 		void __iomem *clk_base, void __iomem *pmc,
 		unsigned long flags, struct tegra_clk_pll_params *pll_params,
@@ -1397,6 +1516,9 @@ struct clk *tegra_clk_register_pll(const char *name, const char *parent_name,
 {
 	struct tegra_clk_pll *pll;
 	struct clk *clk;
+
+	if (pll_params->base_reg == 0xd0)
+		init_plld(pll_params, clk_base);
 
 	pll_params->flags |= TEGRA_PLL_BYPASS;
 	pll_params->flags |= TEGRA_PLL_HAS_LOCK_ENABLE;
