@@ -210,6 +210,16 @@ static int panel_jdi_disable(struct drm_panel *panel)
 	if (ret < 0)
 		DRM_ERROR("failed to disable backlight: %d\n", ret);
 
+	return ret;
+}
+
+static int panel_jdi_unprepare(struct drm_panel *panel)
+{
+	struct panel_jdi *jdi = to_panel_jdi(panel);
+	int ret;
+
+	if (!jdi->enabled)
+		return 0;
 
 	ret = mipi_dsi_dcs_set_display_off(jdi->dsi);
 	if (ret < 0)
@@ -223,8 +233,23 @@ static int panel_jdi_disable(struct drm_panel *panel)
 
 	msleep(150);
 
-	regulator_disable(jdi->ddi_supply);
+	gpio_set_value(jdi->reset_gpio,
+		(jdi->reset_gpio_flags & GPIO_ACTIVE_LOW) ? 0 : 1);
+
+	usleep_range(1000, 2000);
+
+	gpio_set_value(jdi->enable_gpio,
+		(jdi->enable_gpio_flags & GPIO_ACTIVE_LOW) ? 1 : 0);
+
+	usleep_range(2000, 4000);
+
 	regulator_disable(jdi->supply);
+
+	usleep_range(10000, 20000);
+
+	regulator_disable(jdi->ddi_supply);
+
+	msleep(50);
 
 	jdi->enabled = false;
 
@@ -487,8 +512,9 @@ static int panel_jdi_get_modes(struct drm_panel *panel)
 
 static const struct drm_panel_funcs panel_jdi_funcs = {
 	.prepare = panel_jdi_prepare,
-	.disable = panel_jdi_disable,
 	.enable = panel_jdi_enable,
+	.disable = panel_jdi_disable,
+	.unprepare = panel_jdi_unprepare,
 	.get_modes = panel_jdi_get_modes,
 };
 
