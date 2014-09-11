@@ -371,7 +371,7 @@
 			compatible = "ti,lp8557-jdi";
 			reg = <0x2c>;
 
-			brightness-mode = <0x0>;
+			brightness-mode = <0x2>;
 			current = <5>;
 			pwm-frequency = <1>;
 			boost-frequency = <1>;
