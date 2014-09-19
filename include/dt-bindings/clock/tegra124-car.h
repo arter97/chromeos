@@ -185,8 +185,8 @@
 /* 161 */
 /* 162 */
 /* 163 */
-/* 164 */
-/* 165 */
+#define TEGRA124_CLK_CAM_MCLK 164
+#define TEGRA124_CLK_CAM_MCLK2 165
 #define TEGRA124_CLK_I2C6 166
 /* 167 */
 /* 168 */
