@@ -328,6 +328,38 @@ static void cirrus_crtc_commit(struct drm_crtc *crtc)
 {
 }
 
+static int cirrus_crtc_page_flip(struct drm_crtc *crtc,
+				 struct drm_framebuffer *fb,
+				 struct drm_pending_vblank_event *event)
+{
+	struct drm_device *dev = crtc->dev;
+	unsigned long flags;
+
+	cirrus_crtc_do_set_base(crtc, fb, 0, 0, true);
+
+	spin_lock_irqsave(&dev->event_lock, flags);
+	if (event) {
+		struct timeval now;
+
+		event->event.sequence = drm_vblank_count_and_time(dev, 0, &now);
+		event->event.tv_sec = now.tv_sec;
+		event->event.tv_usec = now.tv_usec;
+
+
+		list_add_tail(&event->base.link,
+			      &event->base.file_priv->event_list);
+
+		wake_up_interruptible(&event->base.file_priv->event_wait);
+	}
+	spin_unlock_irqrestore(&dev->event_lock, flags);
+
+	drm_handle_vblank(dev, 0);
+
+	crtc->fb = fb;
+
+	return 0;
+}
+
 /*
  * The core can pass us a set of gamma values to program. We actually only
  * use this for 8-bit mode so can't perform smooth fades on deeper modes,
@@ -361,6 +393,7 @@ static void cirrus_crtc_destroy(struct drm_crtc *crtc)
 
 /* These provide the minimum set of functions required to handle a CRTC */
 static const struct drm_crtc_funcs cirrus_crtc_funcs = {
+	.page_flip = cirrus_crtc_page_flip,
 	.gamma_set = cirrus_crtc_gamma_set,
 	.set_config = drm_crtc_helper_set_config,
 	.destroy = cirrus_crtc_destroy,
