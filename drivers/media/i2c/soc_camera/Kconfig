@@ -1,5 +1,11 @@
 comment "soc_camera sensor drivers"
 
+config SOC_CAMERA_AD5823
+	tristate "ad5823 support"
+	depends on SOC_CAMERA && I2C
+	help
+	  This driver supports AD5823 focusers from Analog Devices
+
 config SOC_CAMERA_IMX074
 	tristate "imx074 support"
 	depends on SOC_CAMERA && I2C
