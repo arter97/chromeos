@@ -32,19 +32,32 @@
 			status = "okay";
 
 			port@TEGRA_CAMERA_PORT_CSI_A {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				reg = <TEGRA_CAMERA_PORT_CSI_A>;
 
-				csia_endpoint: endpoint {
+				csia_endpoint: endpoint@TEGRA_CAMERA_EP_SENSOR {
+					reg = <TEGRA_CAMERA_EP_SENSOR>;
 					remote-endpoint = <&imx219_endpoint>;
 					data-lanes = <0 1 2 3>;
 					clock-lanes = <0>;
 				};
+
+				vcma_endpoint: endpoint@TEGRA_CAMERA_EP_VCM {
+					reg = <TEGRA_CAMERA_EP_VCM>;
+					remote-endpoint = <&ad5823_endpoint>;
+				};
 			};
 
 			port@TEGRA_CAMERA_PORT_CSI_B {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
 				reg = <TEGRA_CAMERA_PORT_CSI_B>;
 
-				csib_endpoint: endpoint {
+				csib_endpoint: endpoint@TEGRA_CAMERA_EP_SENSOR {
+					reg = <TEGRA_CAMERA_EP_SENSOR>;
 					remote-endpoint = <&imx208_endpoint>;
 					data-lanes = <8>;
 					clock-lanes = <4>;
@@ -417,6 +430,18 @@
 		status = "okay";
 		clock-frequency = <400000>;
 
+		ad5823@0c {
+			compatible = "ad,ad5823";
+			reg = <0x0c>;
+			power-supply = <&af_pwdn>;
+
+			port {
+				ad5823_endpoint: endpoint {
+					remote-endpoint = <&vcma_endpoint>;
+				};
+			};
+		};
+
 		imx219@10 {
 			compatible = "sony,imx219";
 			reg = <0x10>;
@@ -748,6 +773,15 @@
 			regulator-max-microvolt = <1800000>;
 			enable-active-high;
 			gpio = <&palmas_gpio 4 GPIO_ACTIVE_HIGH>;
+		};
+
+		af_pwdn: fixed-regulator@8 {
+			compatible = "regulator-fixed";
+			reg = <8>;
+			regulator-name = "af-pwrdn";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			gpio = <&gpio TEGRA_GPIO(BB, 7) GPIO_ACTIVE_HIGH>;
 		};
 	};
 
