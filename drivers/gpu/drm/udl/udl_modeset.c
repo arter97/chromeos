@@ -334,6 +334,38 @@ static void udl_crtc_destroy(struct drm_crtc *crtc)
 	kfree(crtc);
 }
 
+static int udl_crtc_page_flip(struct drm_crtc *crtc,
+			      struct drm_framebuffer *fb,
+			      struct drm_pending_vblank_event *event)
+{
+	struct udl_framebuffer *ufb = to_udl_fb(fb);
+	struct drm_device *dev = crtc->dev;
+	unsigned long flags;
+
+	udl_handle_damage(ufb, 0, 0, fb->width, fb->height);
+
+	spin_lock_irqsave(&dev->event_lock, flags);
+	if (event) {
+		struct timeval now;
+		unsigned int seq;
+
+		seq = drm_vblank_count_and_time(dev, 0, &now);
+		event->pipe = 0;
+		event->event.sequence = seq;
+		event->event.tv_sec = now.tv_sec;
+		event->event.tv_usec = now.tv_usec;
+
+		list_add_tail(&event->base.link,
+			&event->base.file_priv->event_list);
+
+		wake_up_interruptible(&event->base.file_priv->event_wait);
+	}
+	spin_unlock_irqrestore(&dev->event_lock, flags);
+	crtc->fb = fb;
+
+	return 0;
+}
+
 static void udl_load_lut(struct drm_crtc *crtc)
 {
 }
@@ -360,6 +392,7 @@ static struct drm_crtc_helper_funcs udl_helper_funcs = {
 static const struct drm_crtc_funcs udl_crtc_funcs = {
 	.set_config = drm_crtc_helper_set_config,
 	.destroy = udl_crtc_destroy,
+	.page_flip = udl_crtc_page_flip,
 };
 
 int udl_crtc_init(struct drm_device *dev)
