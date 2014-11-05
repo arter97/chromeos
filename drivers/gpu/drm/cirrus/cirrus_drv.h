@@ -160,6 +160,7 @@ struct cirrus_bo {
 	struct ttm_buffer_object bo;
 	struct ttm_placement placement;
 	struct ttm_bo_kmap_obj kmap;
+	struct ttm_bo_kmap_obj dma_buf_vmap;
 	struct drm_gem_object gem;
 	u32 placements[3];
 	int pin_count;
@@ -242,4 +243,14 @@ int cirrus_bo_reserve(struct cirrus_bo *bo, bool no_wait);
 void cirrus_bo_unreserve(struct cirrus_bo *bo);
 int cirrus_bo_push_sysram(struct cirrus_bo *bo);
 int cirrus_bo_pin(struct cirrus_bo *bo, u32 pl_flag, u64 *gpu_addr);
+int cirrus_bo_unpin(struct cirrus_bo *bo);
+
+				/* cirrus_prime.c */
+struct dma_buf *cirrus_gem_prime_export(struct drm_device *dev,
+					struct drm_gem_object *obj,
+					int flags);
+struct drm_gem_object *cirrus_gem_prime_import(struct drm_device *dev,
+					       struct dma_buf *dma_buf);
+
+
 #endif				/* __CIRRUS_DRV_H__ */

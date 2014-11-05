@@ -88,7 +88,8 @@ static const struct file_operations cirrus_driver_fops = {
 	.fasync = drm_fasync,
 };
 static struct drm_driver driver = {
-	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_USE_MTRR,
+	.driver_features =
+		DRIVER_MODESET | DRIVER_GEM | DRIVER_USE_MTRR | DRIVER_PRIME,
 	.load = cirrus_driver_load,
 	.unload = cirrus_driver_unload,
 	.fops = &cirrus_driver_fops,
@@ -103,6 +104,10 @@ static struct drm_driver driver = {
 	.dumb_create = cirrus_dumb_create,
 	.dumb_map_offset = cirrus_dumb_mmap_offset,
 	.dumb_destroy = cirrus_dumb_destroy,
+	.prime_handle_to_fd	= drm_gem_prime_handle_to_fd,
+	.prime_fd_to_handle	= drm_gem_prime_fd_to_handle,
+	.gem_prime_export = cirrus_gem_prime_export,
+	.gem_prime_import = cirrus_gem_prime_import,
 };
 
 static struct pci_driver cirrus_pci_driver = {
