@@ -95,6 +95,18 @@ static struct soc_camera_subdev_desc imx208_subdev_desc = {
 	},
 };
 
+static struct regulator_bulk_data ad5823_subdev_regulators[] = {
+	{ .supply = "avdd-front-camera" }, // LDO7 -> PP2800L_FCAM -> PP2800_VCM
+	{ .supply = "af-pwdn" }, // Tegra GPIO PBB7
+};
+
+static struct soc_camera_subdev_desc ad5823_subdev_desc = {
+	.sd_pdata = {
+		.regulators = ad5823_subdev_regulators,
+		.num_regulators = ARRAY_SIZE(ad5823_subdev_regulators),
+	},
+};
+
 /* Bus notifier for hooking platform data to the sensors */
 static int tegra_media_notifier_call(struct notifier_block *nb,
 				     unsigned long event, void *__dev)
@@ -108,6 +120,8 @@ static int tegra_media_notifier_call(struct notifier_block *nb,
 		dev->platform_data = &imx219_subdev_desc;
 	else if (of_device_is_compatible(dev->of_node, "sony,imx208"))
 		dev->platform_data = &imx208_subdev_desc;
+	else if (of_device_is_compatible(dev->of_node, "ad,ad5823"))
+		dev->platform_data = &ad5823_subdev_desc;
 
 	return NOTIFY_OK;
 }
