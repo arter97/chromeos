@@ -46,6 +46,10 @@ EXPORT_SYMBOL(drm_vblank_offdelay);
 unsigned int drm_timestamp_precision = 20;  /* Default to 20 usecs. */
 EXPORT_SYMBOL(drm_timestamp_precision);
 
+/* When set to 1, allow set/drop master ioctls as normal user */
+u32 drm_master_relax;
+EXPORT_SYMBOL(drm_master_relax);
+
 MODULE_AUTHOR(CORE_AUTHOR);
 MODULE_DESCRIPTION(CORE_DESC);
 MODULE_LICENSE("GPL and additional rights");
@@ -216,26 +220,30 @@ int drm_setmaster_ioctl(struct drm_device *dev, void *data,
 	if (file_priv->is_master)
 		return 0;
 
-	if (file_priv->minor->master && file_priv->minor->master != file_priv->master)
-		return -EINVAL;
+	if (!drm_master_relax || !capable(CAP_SYS_ADMIN)) {
+		if (file_priv->minor->master &&
+				file_priv->minor->master != file_priv->master)
+			return -EINVAL;
 
-	if (!file_priv->master)
-		return -EINVAL;
+		if (!file_priv->master)
+			return -EINVAL;
 
-	if (!file_priv->minor->master &&
-	    file_priv->minor->master != file_priv->master) {
-		mutex_lock(&dev->struct_mutex);
-		file_priv->minor->master = drm_master_get(file_priv->master);
-		file_priv->is_master = 1;
-		if (dev->driver->master_set) {
-			ret = dev->driver->master_set(dev, file_priv, false);
-			if (unlikely(ret != 0)) {
-				file_priv->is_master = 0;
-				drm_master_put(&file_priv->minor->master);
-			}
-		}
-		mutex_unlock(&dev->struct_mutex);
+		if (file_priv->minor->master ||
+				file_priv->minor->master == file_priv->master)
+			return 0;
 	}
+
+	mutex_lock(&dev->struct_mutex);
+	file_priv->minor->master = drm_master_get(file_priv->master);
+	file_priv->is_master = 1;
+	if (dev->driver->master_set) {
+		ret = dev->driver->master_set(dev, file_priv, false);
+		if (unlikely(ret != 0)) {
+			file_priv->is_master = 0;
+			drm_master_put(&file_priv->minor->master);
+		}
+	}
+	mutex_unlock(&dev->struct_mutex);
 
 	return 0;
 }
