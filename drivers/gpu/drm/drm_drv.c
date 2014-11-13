@@ -172,8 +172,6 @@ static const struct drm_ioctl_desc drm_ioctls[] = {
 
 #define DRM_CORE_IOCTL_COUNT	ARRAY_SIZE( drm_ioctls )
 
-/* When set to 1, allow set/drop master ioctls as normal user */
-static u32 drm_master_relax;
 
 /** File operations structure */
 static const struct file_operations drm_stub_fops = {

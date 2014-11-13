@@ -47,6 +47,10 @@ unsigned int drm_vblank_offdelay = 50;    /* Default to 50 msecs. */
 
 unsigned int drm_timestamp_precision = 20;  /* Default to 20 usecs. */
 
+/* When set to 1, allow set/drop master ioctls as normal user */
+u32 drm_master_relax;
+EXPORT_SYMBOL(drm_master_relax);
+
 /*
  * Default to use monotonic timestamps for wait-for-vblank and page-flip
  * complete events.
@@ -211,14 +215,17 @@ int drm_setmaster_ioctl(struct drm_device *dev, void *data,
 	if (file_priv->is_master)
 		return 0;
 
-	if (file_priv->minor->master && file_priv->minor->master != file_priv->master)
-		return -EINVAL;
+	if (!drm_master_relax || !capable(CAP_SYS_ADMIN)) {
+		if (file_priv->minor->master &&
+				file_priv->minor->master != file_priv->master)
+			return -EINVAL;
 
-	if (!file_priv->master)
-		return -EINVAL;
+		if (!file_priv->master)
+			return -EINVAL;
 
-	if (file_priv->minor->master)
-		return -EINVAL;
+		if (file_priv->minor->master)
+			return -EINVAL;
+	}
 
 	mutex_lock(&dev->struct_mutex);
 	file_priv->minor->master = drm_master_get(file_priv->master);
