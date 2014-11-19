@@ -633,6 +633,7 @@ net/core/skbuff.c:2743 skb_segment() error: potential NULL dereference 'tail'.
 net/core/skbuff.c:728 skb_copy_ubufs() error: potential NULL dereference 'head'.
 net/ipv4/fib_trie.c:1127 fib_insert_node() error: potential NULL dereference 'tp'.
 net/ipv4/fib_trie.c:961 insert_leaf_info() error: potential NULL dereference 'li'.
+net/ipv4/icmp.c:448 icmp_route_lookup() error: potential NULL dereference 'rt'.
 net/ipv4/igmp.c:2175 ip_mc_msfget() error: we previously assumed 'psl' could be null (see line 2161)
 net/ipv4/igmp.c:2227 ip_mc_gsfget() error: we previously assumed 'psl' could be null (see line 2214)
 net/ipv4/netfilter/ip_tables.c:67:16: error: bad constant expression
