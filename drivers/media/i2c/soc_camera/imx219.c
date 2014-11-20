@@ -21,7 +21,7 @@
 #include <media/v4l2-subdev.h>
 
 /* IMX219 supported geometry */
-#define IMX219_WIDTH			3280
+#define IMX219_WIDTH			3264//3280
 #define IMX219_HEIGHT			2460
 
 #define IMX219_TABLE_END		0xffff
