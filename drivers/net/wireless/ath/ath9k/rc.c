@@ -699,14 +699,15 @@ static u8 ath_rc_get_highest_rix(struct ath_softc *sc,
 static void ath_rc_rate_set_series(const struct ath_rate_table *rate_table,
 				   struct ieee80211_tx_rate *rate,
 				   struct ieee80211_tx_rate_control *txrc,
-				   u8 tries, u8 rix, int rtsctsenable)
+				   u8 tries, u8 rix,
+				   enum ath_rate_rts_mode rtsctsenable)
 {
 	rate->count = tries;
 	rate->idx = rate_table->info[rix].ratecode;
 
 	if (txrc->short_preamble)
 		rate->flags |= IEEE80211_TX_RC_USE_SHORT_PREAMBLE;
-	if (txrc->rts || rtsctsenable)
+	if (txrc->rts || rtsctsenable == WLAN_RC_RTS_ENABLED)
 		rate->flags |= IEEE80211_TX_RC_USE_RTS_CTS;
 
 	if (WLAN_RC_PHY_HT(rate_table->info[rix].phy)) {
@@ -716,6 +717,10 @@ static void ath_rc_rate_set_series(const struct ath_rate_table *rate_table,
 			rate->flags |= IEEE80211_TX_RC_40_MHZ_WIDTH;
 		if (WLAN_RC_PHY_SGI(rate_table->info[rix].phy))
 			rate->flags |= IEEE80211_TX_RC_SHORT_GI;
+		if (rtsctsenable == WLAN_RC_RTS_SMPS &&
+		    (WLAN_RC_PHY_DS(rate_table->info[rix].phy) ||
+		     WLAN_RC_PHY_DS(rate_table->info[rix].phy)))
+			rate->flags |= IEEE80211_TX_RC_USE_RTS_CTS;
 	}
 }
 
@@ -757,6 +762,7 @@ static void ath_get_rate(void *priv, struct ieee80211_sta *sta, void *priv_sta,
 	__le16 fc = hdr->frame_control;
 	u8 try_per_rate, i = 0, rix, high_rix;
 	int is_probe = 0;
+	enum ath_rate_rts_mode force_rts = WLAN_RC_RTS_DISABLED;
 
 	if (rate_control_send_low(sta, priv_sta, txrc))
 		return;
@@ -791,24 +797,27 @@ static void ath_get_rate(void *priv, struct ieee80211_sta *sta, void *priv_sta,
 	    (sta->ht_cap.cap & IEEE80211_HT_CAP_TX_STBC))
 		tx_info->flags |= (1 << IEEE80211_TX_CTL_STBC_SHIFT);
 
+	if (ath_rc_priv->smps == WLAN_HT_CAP_SM_PS_DYNAMIC)
+		force_rts = WLAN_RC_RTS_SMPS;
+
 	if (is_probe) {
 		/* set one try for probe rates. For the
 		 * probes don't enable rts */
 		ath_rc_rate_set_series(rate_table, &rates[i++], txrc,
-				       1, rix, 0);
+				       1, rix, force_rts);
 
 		/* Get the next tried/allowed rate. No RTS for the next series
 		 * after the probe rate
 		 */
 		ath_rc_get_lower_rix(rate_table, ath_rc_priv, rix, &rix);
 		ath_rc_rate_set_series(rate_table, &rates[i++], txrc,
-				       try_per_rate, rix, 0);
+				       try_per_rate, rix, force_rts);
 
 		tx_info->flags |= IEEE80211_TX_CTL_RATE_CTRL_PROBE;
 	} else {
 		/* Set the chosen rate. No RTS for first series entry. */
 		ath_rc_rate_set_series(rate_table, &rates[i++], txrc,
-				       try_per_rate, rix, 0);
+				       try_per_rate, rix, force_rts);
 	}
 
 	/* Fill in the other rates for multirate retry */
@@ -823,7 +832,7 @@ static void ath_get_rate(void *priv, struct ieee80211_sta *sta, void *priv_sta,
 		ath_rc_get_lower_rix(rate_table, ath_rc_priv, rix, &rix);
 		/* All other rates in the series have RTS enabled */
 		ath_rc_rate_set_series(rate_table, &rates[i], txrc,
-				       try_per_rate, rix, 1);
+				       try_per_rate, rix, WLAN_RC_RTS_ENABLED);
 	}
 
 	/*
@@ -1249,6 +1258,12 @@ static void ath_rc_init(struct ath_softc *sc,
 
 	ath_dbg(common, CONFIG, "RC Initialized with capabilities: 0x%x\n",
 		ath_rc_priv->ht_cap);
+
+	if (sc->sc_ah->opmode == NL80211_IFTYPE_AP) {
+		ath_rc_priv->smps =
+			(sta->ht_cap.cap & IEEE80211_HT_CAP_SM_PS) >>
+				IEEE80211_HT_CAP_SM_PS_SHIFT;
+	}
 }
 
 static u8 ath_rc_build_ht_caps(struct ath_softc *sc, struct ieee80211_sta *sta,
@@ -1417,12 +1432,8 @@ static void ath_rate_update(void *priv, struct ieee80211_supported_band *sband,
 	bool local_cw40 = !!(ath_rc_priv->ht_cap & WLAN_RC_40_FLAG);
 	bool local_sgi = !!(ath_rc_priv->ht_cap & WLAN_RC_SGI_FLAG);
 
-	/* FIXME: Handle AP mode later when we support CWM */
-
-	if (changed & IEEE80211_RC_HT_CHANGED) {
-		if (sc->sc_ah->opmode != NL80211_IFTYPE_STATION)
-			return;
-
+	if (changed & IEEE80211_RC_HT_CHANGED &&
+	    sc->sc_ah->opmode == NL80211_IFTYPE_STATION) {
 		if (oper_chan_type == NL80211_CHAN_HT40MINUS ||
 		    oper_chan_type == NL80211_CHAN_HT40PLUS)
 			oper_cw40 = true;
@@ -1448,6 +1459,16 @@ static void ath_rate_update(void *priv, struct ieee80211_supported_band *sband,
 				sc->hw->conf.channel_type);
 		}
 	}
+
+	/* FIXME: Handle AP (more of) mode later when we support CWM */
+
+	if (changed & IEEE80211_RC_SMPS_CHANGED &&
+	    sc->sc_ah->opmode == NL80211_IFTYPE_AP) {
+		ath_rc_priv->smps =
+			(sta->ht_cap.cap & IEEE80211_HT_CAP_SM_PS) >>
+				IEEE80211_HT_CAP_SM_PS_SHIFT;
+	}
+
 }
 
 #ifdef CONFIG_ATH9K_DEBUGFS

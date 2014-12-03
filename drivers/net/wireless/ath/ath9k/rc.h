@@ -211,12 +211,19 @@ struct ath_rate_priv {
 	u32 probe_time;
 	u32 per_down_time;
 	u32 probe_interval;
+	u8 smps;
 	struct ath_rateset neg_rates;
 	struct ath_rateset neg_ht_rates;
 	const struct ath_rate_table *rate_table;
 
 	struct dentry *debugfs_rcstats;
 	struct ath_rc_stats rcstats[RATE_TABLE_SIZE];
+};
+
+enum ath_rate_rts_mode {
+	WLAN_RC_RTS_DISABLED = 0,
+	WLAN_RC_RTS_ENABLED = 1,
+	WLAN_RC_RTS_SMPS = 2
 };
 
 #ifdef CONFIG_ATH9K_RATE_CONTROL
