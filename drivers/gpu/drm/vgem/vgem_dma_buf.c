@@ -114,70 +114,35 @@ struct drm_gem_object *vgem_gem_prime_import(struct drm_device *dev,
 					     struct dma_buf *dma_buf)
 {
 	struct drm_vgem_gem_object *obj = NULL;
-	struct dma_buf_attachment *attach = NULL;
-	struct sg_table *sg = NULL;
-	struct scatterlist *sgl;
-	int num_pages;
-	int i = 0;
 	int ret;
 
-	attach = dma_buf_attach(dma_buf, dev->dev);
-	if (IS_ERR(attach)) {
-		ret = PTR_ERR(attach);
-		goto fail;
+	/* If we're importing one of our own, do not create a new object */
+	if (dma_buf->ops == &vgem_dmabuf_ops) {
+		obj = dma_buf->priv;
+		BUG_ON(!obj);
+		drm_gem_object_reference(&obj->base);
+		return &obj->base;
 	}
 
-	get_dma_buf(dma_buf);
-
-	sg = dma_buf_map_attachment(attach, DMA_BIDIRECTIONAL);
-	if (IS_ERR(sg)) {
-		ret = PTR_ERR(sg);
-		goto fail_detach;
-	}
 
 	obj = kzalloc(sizeof(*obj), GFP_KERNEL);
 	if (obj == NULL) {
 		ret = -ENOMEM;
-		goto fail_unmap;
+		goto fail;
 	}
 
-	obj->base.import_attach = attach;
-	obj->sg = sg;
-
-	/* As a result of this mmap will not work -yet- */
 	ret = drm_gem_object_init(dev, &obj->base, dma_buf->size);
 	if (ret) {
 		ret = -ENOMEM;
 		goto fail_free;
 	}
 
-	num_pages = obj->base.size / PAGE_SIZE;
-
-	obj->pages = drm_malloc_ab(num_pages, sizeof(struct page *));
-	if (!obj->pages) {
-		ret = -ENOMEM;
-		goto fail_gem_release;
-	}
-
-	sgl = sg->sgl;
-
-	while (sgl) {
-		obj->pages[i] = sg_page(sgl);
-		sgl = sg_next(sgl);
-		i++;
-	}
+	obj->imported_dma_buf = dma_buf;
 
 	return &obj->base;
 
-fail_gem_release:
-	drm_gem_object_release(&obj->base);
 fail_free:
 	kfree(obj);
-fail_unmap:
-	dma_buf_unmap_attachment(attach, sg, DMA_BIDIRECTIONAL);
-fail_detach:
-	dma_buf_detach(dma_buf, attach);
-	dma_buf_put(dma_buf);
 fail:
 	return ERR_PTR(ret);
 }

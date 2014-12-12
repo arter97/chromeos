@@ -31,6 +31,7 @@
  */
 
 #include "drmP.h"
+#include <linux/dma-buf.h>
 #include <linux/module.h>
 #include <linux/ramfs.h>
 #include <linux/shmem_fs.h>
@@ -92,9 +93,9 @@ static void vgem_gem_free_object(struct drm_gem_object *obj)
 	if (obj->map_list.map)
 		drm_gem_free_mmap_offset(obj);
 
-	if (obj->import_attach) {
-		drm_prime_gem_destroy(obj, vgem_obj->sg);
-		vgem_obj->pages = NULL;
+	if (vgem_obj->imported_dma_buf) {
+		dma_buf_put(vgem_obj->imported_dma_buf);
+		vgem_obj->imported_dma_buf = NULL;
 	}
 
 	drm_gem_object_release(obj);
@@ -113,15 +114,13 @@ int vgem_gem_get_pages(struct drm_vgem_gem_object *obj)
 	gfp_t gfpmask = GFP_KERNEL;
 	int num_pages, i, ret = 0;
 
-	num_pages = obj->base.size / PAGE_SIZE;
-
-	if (!obj->pages) {
-		obj->pages = drm_malloc_ab(num_pages, sizeof(struct page *));
-		if (obj->pages == NULL)
-			return -ENOMEM;
-	} else {
+	if (obj->pages || obj->imported_dma_buf)
 		return 0;
-	}
+
+	num_pages = obj->base.size / PAGE_SIZE;
+	obj->pages = drm_malloc_ab(num_pages, sizeof(struct page *));
+	if (obj->pages == NULL)
+		return -ENOMEM;
 
 	mapping = obj->base.filp->f_path.dentry->d_inode->i_mapping;
 	gfpmask |= mapping_gfp_mask(mapping);
@@ -294,16 +293,73 @@ unlock:
 	return ret;
 }
 
+
 int vgem_drm_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 {
-	int ret;
+	struct drm_file *priv = filp->private_data;
+	struct drm_device *dev = priv->minor->dev;
+	struct drm_gem_mm *mm = dev->mm_private;
+	struct drm_local_map *map = NULL;
+	struct drm_gem_object *obj;
+	struct drm_vgem_gem_object *vgem_obj;
+	struct drm_hash_item *hash;
+	int ret = 0;
 
-	ret = drm_gem_mmap(filp, vma);
-	if (ret)
-		return ret;
+	if (drm_device_is_unplugged(dev))
+		return -ENODEV;
 
-	vma->vm_flags &= ~VM_PFNMAP;
-	vma->vm_flags |= VM_MIXEDMAP;
+	mutex_lock(&dev->struct_mutex);
+
+	if (drm_ht_find_item(&mm->offset_hash, vma->vm_pgoff, &hash)) {
+		mutex_unlock(&dev->struct_mutex);
+		return drm_mmap(filp, vma);
+	}
+
+	map = drm_hash_entry(hash, struct drm_map_list, hash)->map;
+	if (!map ||
+	    ((map->flags & _DRM_RESTRICTED) && !capable(CAP_SYS_ADMIN))) {
+		ret =  -EPERM;
+		goto out_unlock;
+	}
+
+	/* Check for valid size. */
+	if (map->size < vma->vm_end - vma->vm_start) {
+		ret = -EINVAL;
+		goto out_unlock;
+	}
+
+	obj = map->handle;
+	vgem_obj = to_vgem_bo(obj);
+
+	if (vgem_obj->imported_dma_buf) {
+		ret = dma_buf_mmap(vgem_obj->imported_dma_buf, vma, 0);
+		goto out_unlock;
+	}
+
+	if (!obj->dev->driver->gem_vm_ops) {
+		ret = -EINVAL;
+		goto out_unlock;
+	}
+
+	vma->vm_flags |= VM_IO | VM_MIXEDMAP | VM_DONTEXPAND;
+	vma->vm_ops = obj->dev->driver->gem_vm_ops;
+	vma->vm_private_data = map->handle;
+	vma->vm_page_prot =
+		pgprot_writecombine(vm_get_page_prot(vma->vm_flags));
+
+	/* Take a ref for this mapping of the object, so that the fault
+	 * handler can dereference the mmap offset's pointer to the object.
+	 * This reference is cleaned up by the corresponding vm_close
+	 * (which should happen whether the vma was created by this call, or
+	 * by a vm_open due to mremap or partial unmap or whatever).
+	 */
+
+	mutex_unlock(&dev->struct_mutex);
+	drm_gem_vm_open(vma);
+	return ret;
+
+out_unlock:
+	mutex_unlock(&dev->struct_mutex);
 
 	return ret;
 }
