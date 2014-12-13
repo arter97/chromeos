@@ -114,7 +114,14 @@ static void *cirrus_kmap_dma_buf(struct dma_buf *dma_buf,
 static int cirrus_mmap_dma_buf(struct dma_buf *dma_buf,
 			       struct vm_area_struct *vma)
 {
-	return -EINVAL;
+	struct drm_gem_object *obj = dma_buf->priv;
+	struct cirrus_bo *cirrusbo = gem_to_cirrus_bo(obj);
+	int ret = 0;
+
+	ret = ttm_fbdev_mmap(vma, &cirrusbo->bo);
+	vma->vm_pgoff = cirrusbo->bo.vm_node->start;
+
+	return ret;
 }
 
 static struct dma_buf_ops cirrus_dmabuf_ops = {
