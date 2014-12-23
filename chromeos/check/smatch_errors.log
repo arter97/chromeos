@@ -694,3 +694,8 @@ sound/pci/hda/patch_hdmi.c:908 hdmi_pcm_open() error: potential NULL dereference
 sound/pci/hda/patch_realtek.c:2440 alc_build_pcms() error: we previously assumed 'spec->adc_nids' could be null (see line 2355)
 sound/usb/midi.c:2135 snd_usbmidi_create() error: we previously assumed 'quirk' could be null (see line 2124)
 sound/usb/mixer_quirks.c:375 snd_nativeinstruments_control_get() error: doing dma on the stack ((null))
+net/bridge/br_forward.c:240 br_multicast_flood() error: potential NULL dereference 'p'."
+net/bridge/br_multicast.c:652 br_multicast_add_group() error: potential null dereference 'mp'.  (br_multicast_new_group returns null)"
+drivers/misc/lkdtm.c:301 lkdtm_do_action() error: buffer overflow 'p' 8 <= 12"
+drivers/misc/lkdtm.c:320 lkdtm_do_action() error: potential null dereference 'data'.  (kmalloc returns null)"
+drivers/misc/lkdtm.c:320 lkdtm_do_action() error: buffer overflow 'data' 255 <= 256"
