@@ -950,12 +950,16 @@ static int mxt_enter_bl(struct mxt_data *data)
 	if (mxt_in_bootloader(data))
 		return 0;
 
+	disable_irq(data->irq);
+
 	if (data->input_dev) {
 		input_unregister_device(data->input_dev);
-		/* Clean up message queue in device */
-		mxt_handle_messages(data, false);
 		data->input_dev = NULL;
 	}
+
+	enable_irq(data->irq);
+	/* Clean up message queue in device */
+	mxt_handle_messages(data, false);
 
 	disable_irq(data->irq);
 
