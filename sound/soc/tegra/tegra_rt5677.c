@@ -36,6 +36,7 @@
 #include <sound/soc.h>
 
 #include "../codecs/rt5677.h"
+#include "../codecs/ts3a227e.h"
 
 #include "tegra_asoc_utils.h"
 
@@ -43,9 +44,8 @@
 
 struct tegra_rt5677 {
 	struct tegra_asoc_utils_data util_data;
-	int gpio_hp_det;
+	struct snd_soc_jack tegra_rt5677_headset_jack;
 	int gpio_hp_en;
-	int gpio_mic_present;
 	int gpio_dmic_clk_en;
 };
 
@@ -97,32 +97,6 @@ static struct snd_soc_ops tegra_rt5677_ops = {
 	.hw_params = tegra_rt5677_asoc_hw_params,
 };
 
-static struct snd_soc_jack tegra_rt5677_hp_jack;
-
-static struct snd_soc_jack_pin tegra_rt5677_hp_jack_pins = {
-	.pin = "Headphone",
-	.mask = SND_JACK_HEADPHONE,
-};
-static struct snd_soc_jack_gpio tegra_rt5677_hp_jack_gpio = {
-	.name = "Headphone detection",
-	.report = SND_JACK_HEADPHONE,
-	.debounce_time = 150,
-};
-
-static struct snd_soc_jack tegra_rt5677_mic_jack;
-
-static struct snd_soc_jack_pin tegra_rt5677_mic_jack_pins = {
-	.pin = "Headset Mic",
-	.mask = SND_JACK_MICROPHONE,
-};
-
-static struct snd_soc_jack_gpio tegra_rt5677_mic_jack_gpio = {
-	.name = "Headset Mic detection",
-	.report = SND_JACK_MICROPHONE,
-	.debounce_time = 150,
-	.invert = 1
-};
-
 static const struct snd_soc_dapm_widget tegra_rt5677_dapm_widgets[] = {
 	SND_SOC_DAPM_SPK("Speaker", NULL),
 	SND_SOC_DAPM_HP("Headphone", tegra_rt5677_event_hp),
@@ -146,50 +120,32 @@ static int tegra_rt5677_asoc_init(struct snd_soc_pcm_runtime *rtd)
 	struct snd_soc_dapm_context *dapm = &codec->dapm;
 	struct tegra_rt5677 *machine = snd_soc_card_get_drvdata(rtd->card);
 
-	snd_soc_jack_new(codec, "Headphone Jack", SND_JACK_HEADPHONE,
-			&tegra_rt5677_hp_jack);
-	snd_soc_jack_add_pins(&tegra_rt5677_hp_jack, 1,
-			&tegra_rt5677_hp_jack_pins);
-
-	if (gpio_is_valid(machine->gpio_hp_det)) {
-		tegra_rt5677_hp_jack_gpio.gpio = machine->gpio_hp_det;
-		snd_soc_jack_add_gpios(&tegra_rt5677_hp_jack, 1,
-				&tegra_rt5677_hp_jack_gpio);
-	}
-
-
-	snd_soc_jack_new(codec, "Mic Jack", SND_JACK_MICROPHONE,
-			&tegra_rt5677_mic_jack);
-	snd_soc_jack_add_pins(&tegra_rt5677_mic_jack, 1,
-			&tegra_rt5677_mic_jack_pins);
-
-	if (gpio_is_valid(machine->gpio_mic_present)) {
-		tegra_rt5677_mic_jack_gpio.gpio = machine->gpio_mic_present;
-		snd_soc_jack_add_gpios(&tegra_rt5677_mic_jack, 1,
-				&tegra_rt5677_mic_jack_gpio);
-	}
+	snd_soc_jack_new(codec, "Headset Jack",
+		SND_JACK_HEADPHONE | SND_JACK_MICROPHONE |
+		SND_JACK_BTN_0 | SND_JACK_BTN_1 |
+		SND_JACK_BTN_2 | SND_JACK_BTN_3,
+		&machine->tegra_rt5677_headset_jack);
 
 	snd_soc_dapm_force_enable_pin(dapm, "MICBIAS1");
 
 	return 0;
 }
 
-static int tegra_rt5677_card_remove(struct snd_soc_card *card)
+static int tegra_rt5677_headset_init(struct snd_soc_dapm_context *dapm)
 {
+	struct snd_soc_codec *codec =
+		snd_soc_component_to_codec(dapm->component);
+	struct snd_soc_card *card = dapm->component->card;
 	struct tegra_rt5677 *machine = snd_soc_card_get_drvdata(card);
 
-	if (gpio_is_valid(machine->gpio_hp_det)) {
-		snd_soc_jack_free_gpios(&tegra_rt5677_hp_jack, 1,
-				&tegra_rt5677_hp_jack_gpio);
-	}
-
-	if (gpio_is_valid(machine->gpio_mic_present)) {
-		snd_soc_jack_free_gpios(&tegra_rt5677_mic_jack, 1,
-				&tegra_rt5677_mic_jack_gpio);
-	}
-
-	return 0;
+	return ts3a227e_enable_jack_detect(codec,
+		&machine->tegra_rt5677_headset_jack);
 }
+
+static struct snd_soc_aux_dev tegra_rt5677_headset_dev = {
+	.name = "Headset Chip",
+	.init = tegra_rt5677_headset_init,
+};
 
 static struct snd_soc_dai_link tegra_rt5677_dai = {
 	.name = "RT5677",
@@ -204,9 +160,10 @@ static struct snd_soc_dai_link tegra_rt5677_dai = {
 static struct snd_soc_card snd_soc_tegra_rt5677 = {
 	.name = "tegra-rt5677",
 	.owner = THIS_MODULE,
-	.remove = tegra_rt5677_card_remove,
 	.dai_link = &tegra_rt5677_dai,
 	.num_links = 1,
+	.aux_dev = &tegra_rt5677_headset_dev,
+	.num_aux_devs = 1,
 	.controls = tegra_rt5677_controls,
 	.num_controls = ARRAY_SIZE(tegra_rt5677_controls),
 	.dapm_widgets = tegra_rt5677_dapm_widgets,
@@ -233,15 +190,6 @@ static int tegra_rt5677_probe(struct platform_device *pdev)
 	card->dev = &pdev->dev;
 	platform_set_drvdata(pdev, card);
 	snd_soc_card_set_drvdata(card, machine);
-
-	machine->gpio_hp_det = of_get_named_gpio(np, "nvidia,hp-det-gpios", 0);
-	if (machine->gpio_hp_det == -EPROBE_DEFER)
-		return -EPROBE_DEFER;
-
-	machine->gpio_mic_present = of_get_named_gpio(np,
-			"nvidia,mic-present-gpios", 0);
-	if (machine->gpio_mic_present == -EPROBE_DEFER)
-		return -EPROBE_DEFER;
 
 	machine->gpio_hp_en = of_get_named_gpio(np, "nvidia,hp-en-gpios", 0);
 	if (machine->gpio_hp_en == -EPROBE_DEFER)
@@ -295,6 +243,14 @@ static int tegra_rt5677_probe(struct platform_device *pdev)
 		goto err;
 	}
 	tegra_rt5677_dai.platform_of_node = tegra_rt5677_dai.cpu_of_node;
+
+	tegra_rt5677_headset_dev.codec_of_node = of_parse_phandle(np,
+		"nvidia,headset-codec", 0);
+	if (!tegra_rt5677_headset_dev.codec_of_node) {
+		dev_err(&pdev->dev,
+			"Property 'nvidia,headset-codec' missing/invalid\n");
+		return -EINVAL;
+	}
 
 	ret = tegra_asoc_utils_init(&machine->util_data, &pdev->dev);
 	if (ret)
