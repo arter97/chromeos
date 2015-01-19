@@ -344,12 +344,6 @@ void ieee80211_scan_completed(struct ieee80211_hw *hw, bool aborted)
 
 	trace_api_scan_completed(local, aborted);
 
-	if (local->quiescing || local->suspended) {
-		mutex_lock(&local->mtx);
-		__ieee80211_scan_completed(hw, aborted);
-		mutex_unlock(&local->mtx);
-	}
-
 	set_bit(SCAN_COMPLETED, &local->scanning);
 	if (aborted)
 		set_bit(SCAN_ABORTED, &local->scanning);
