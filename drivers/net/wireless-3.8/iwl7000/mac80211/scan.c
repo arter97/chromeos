@@ -344,6 +344,12 @@ void ieee80211_scan_completed(struct ieee80211_hw *hw, bool aborted)
 
 	trace_api_scan_completed(local, aborted);
 
+	if (local->quiescing || local->suspended) {
+		mutex_lock(&local->mtx);
+		__ieee80211_scan_completed(hw, aborted);
+		mutex_unlock(&local->mtx);
+	}
+
 	set_bit(SCAN_COMPLETED, &local->scanning);
 	if (aborted)
 		set_bit(SCAN_ABORTED, &local->scanning);
@@ -765,6 +771,11 @@ void ieee80211_scan_work(struct work_struct *work)
 	bool aborted;
 
 	mutex_lock(&local->mtx);
+
+	if (!ieee80211_can_run_worker(local)) {
+		aborted = true;
+		goto out_complete;
+	}
 
 	sdata = rcu_dereference_protected(local->scan_sdata,
 					  lockdep_is_held(&local->mtx));
