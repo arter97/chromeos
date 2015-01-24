@@ -83,12 +83,7 @@ static struct ramoops_context oops_cxt = {
 static int ramoops_pstore_open(struct pstore_info *psi)
 {
 	struct ramoops_context *cxt = &oops_cxt;
-
-#ifdef CONFIG_PSTORE_CONSOLE
-	cxt->read_count = ~0;
-#else
 	cxt->read_count = 0;
-#endif
 	return 0;
 }
 
@@ -97,39 +92,60 @@ static int ramoops_pstore_close(struct pstore_info *psi)
 	return 0;
 }
 
+static int ramoops_read_kmsg_hdr(char *buffer, struct timespec *time)
+{
+	int header_length = 0;
+
+	if (sscanf(buffer, RAMOOPS_KERNMSG_HDR "%lu.%lu\n%n",
+			&time->tv_sec, &time->tv_nsec, &header_length) != 2) {
+		time->tv_sec = 0;
+		time->tv_nsec = 0;
+	}
+	return header_length;
+}
+
 static ssize_t ramoops_pstore_read(u64 *id, enum pstore_type_id *type,
 				   struct timespec *time,
 				   char **buf,
 				   struct pstore_info *psi)
 {
 	ssize_t size;
-	char *rambuf;
+	char *rambuf = NULL;
 	struct ramoops_context *cxt = &oops_cxt;
 
-	*id = cxt->read_count++;
-	if (cxt->read_count >= cxt->max_count)
-		return -EINVAL;
-	*type = PSTORE_TYPE_DMESG;
+	/* Find the next valid record in the persistent memory */
+	for (; !rambuf && cxt->read_count < cxt->max_count; cxt->read_count++) {
+		*type = PSTORE_TYPE_DMESG;
 #ifdef CONFIG_PSTORE_CONSOLE
-	if (cxt->read_count == 0)
-		*type = PSTORE_TYPE_CONSOLE;
+		/* When pstore console is enabled, the last record slot is used
+		 * for console instead of dmesg.
+		 */
+		if (cxt->read_count + 1 == cxt->max_count)
+			*type = PSTORE_TYPE_CONSOLE;
 #endif
-	/* TODO(kees): Bogus time for the moment. */
-	time->tv_sec = 0;
-	time->tv_nsec = 0;
-
-	rambuf = cxt->virt_addr + (*id * cxt->record_size);
-#ifdef CONFIG_PSTORE_CONSOLE
-	if (*type == PSTORE_TYPE_CONSOLE) {
-		rambuf = cxt->old_con_buf;
-		/* Grab entire record to deal with RAM bit rot. */
-		size = cxt->record_size;
-	} else {
-		size = strnlen(rambuf, cxt->record_size);
+		if (PSTORE_TYPE_DMESG == *type) {
+			*id = cxt->read_count;
+			rambuf = cxt->virt_addr + (*id * cxt->record_size);
+			size = strnlen(rambuf, cxt->record_size);
+			/* Skip this DMESG record if it has no valid header */
+			if (!ramoops_read_kmsg_hdr(rambuf, time))
+				rambuf = NULL;
+		} else if (PSTORE_TYPE_CONSOLE == *type) {
+			/* Only one console record is supported, so *id is 0 */
+			*id = 0;
+			rambuf = cxt->old_con_buf;
+			/* Grab entire record to deal with RAM bit rot. */
+			size = cxt->record_size;
+			/* PSTORE_TYPE_CONSOLE don't currently have valid time
+			 * stamps, so it is initialized to zero.
+			 */
+			time->tv_sec = 0;
+			time->tv_nsec = 0;
+		}
 	}
-#else
-	size = strnlen(rambuf, cxt->record_size);
-#endif
+	if (!rambuf)
+		return -EINVAL;
+
 	*buf = kmalloc(size, GFP_KERNEL);
 	if (*buf == NULL)
 		return -ENOMEM;
