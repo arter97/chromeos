@@ -214,6 +214,18 @@ int btmrvl_send_module_cfg_cmd(struct btmrvl_private *priv, int subcmd)
 }
 EXPORT_SYMBOL_GPL(btmrvl_send_module_cfg_cmd);
 
+int btmrvl_enable_sco_routing_to_host(struct btmrvl_private *priv)
+{
+	int ret;
+	u8 subcmd = 0;
+
+	ret = btmrvl_send_sync_cmd(priv, BT_CMD_ROUTE_SCO_TO_HOST, &subcmd, 1);
+	if (ret)
+		BT_ERR("BT_CMD_ROUTE_SCO_TO_HOST command failed: %#x", ret);
+
+	return ret;
+}
+
 int btmrvl_pscan_window_reporting(struct btmrvl_private *priv, u8 subcmd)
 {
 	struct btmrvl_sdio_card *card = priv->btmrvl_dev.card;
@@ -526,6 +538,8 @@ static int btmrvl_setup(struct hci_dev *hdev)
 	btmrvl_send_module_cfg_cmd(priv, MODULE_BRINGUP_REQ);
 
 	btmrvl_cal_data_dt(priv);
+
+	btmrvl_enable_sco_routing_to_host(priv);
 
 	btmrvl_pscan_window_reporting(priv, 0x01);
 
