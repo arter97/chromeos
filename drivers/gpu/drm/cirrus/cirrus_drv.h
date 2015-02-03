@@ -254,5 +254,7 @@ struct dma_buf *cirrus_gem_prime_export(struct drm_device *dev,
 struct drm_gem_object *cirrus_gem_prime_import(struct drm_device *dev,
 					       struct dma_buf *dma_buf);
 
+extern int cirrus_bpp;
+
 
 #endif				/* __CIRRUS_DRV_H__ */
