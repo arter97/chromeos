@@ -7,6 +7,16 @@
 	compatible = "google,ryu-rev3", "google,ryu-p4", "google,ryu", \
 			"nvidia,tegra132", "nvidia,tegra124";
 
+	serial@70006040 {
+		compatible = "nvidia,tegra124-hsuart", "nvidia,tegra30-hsuart";
+		status = "okay";
+	};
+
+	serial@70006200 {
+		compatible = "nvidia,tegra124-hsuart", "nvidia,tegra30-hsuart";
+		status = "okay";
+	};
+
 	gpio-keys {
 		power {
 			gpios = <&gpio TEGRA_GPIO(Q, 0) GPIO_ACTIVE_LOW>;
