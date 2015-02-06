@@ -53,6 +53,10 @@ int snd_dw_hdmi_jack_detect(struct snd_dw_hdmi *hdmi)
 	if (!hdmi->is_jack_ready)
 		return -EINVAL;
 
+	/* TODO(ykk): Find a more reliable way to trigger hdmi audio jack
+	 * status from dw_hdmi HPD interrupt. */
+	usleep_range(50, 100);
+
 	jack_status = !!(hdmi->data.read(hdmi->data.dw, HDMI_PHY_STAT0)&
 		      HDMI_PHY_HPD) ? SND_JACK_LINEOUT : 0;
 
