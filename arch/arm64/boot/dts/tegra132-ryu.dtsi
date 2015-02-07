@@ -807,14 +807,14 @@
 			"DMIC R1", "Internal Mic 1",
 			"DMIC L2", "Internal Mic 2",
 			"DMIC R2", "Internal Mic 2",
-			"Speaker", "PDM1L",
-			"Speaker", "PDM1R";
+			"Speaker", "AIF2TX";
 
 		nvidia,i2s-controller = <&tegra_i2s1>;
 		nvidia,audio-codec = <&rt5677>;
 
 		nvidia,hp-en-gpios = <&rt5677 1 GPIO_ACTIVE_HIGH>;
 		nvidia,dmic-clk-en-gpios = <&rt5677 2 GPIO_ACTIVE_HIGH>;
+		nvidia,spkr-en-gpios = <&rt5677 4 GPIO_ACTIVE_HIGH>;
 		nvidia,headset-codec = <&headsetcodec>;
 
 		clocks = <&tegra_car TEGRA124_CLK_PLL_A>,

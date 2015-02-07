@@ -29,6 +29,7 @@ Required properties:
 Optional properties:
 - nvidia,hp-det-gpios : The GPIO that detects headphones are plugged in
 - nvidia,hp-en-gpios : The GPIO that enables headphone amplifier
+- nvidia,spkr-en-gpios : The GPIO that enables speaker amplifier
 - nvidia,mic-present-gpios: The GPIO that mic jack is plugged in
 - nvidia,dmic-clk-en-gpios : The GPIO that gates DMIC clock signal
 

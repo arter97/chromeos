@@ -46,7 +46,14 @@ struct tegra_rt5677 {
 	struct tegra_asoc_utils_data util_data;
 	struct snd_soc_jack tegra_rt5677_headset_jack;
 	int gpio_hp_en;
+	int gpio_speaker_en;
 	int gpio_dmic_clk_en;
+};
+
+static struct snd_soc_pcm_stream tegra_rt5677_spk_params = {
+	.formats = SNDRV_PCM_FMTBIT_S16_LE,
+	.channels_min = 2,
+	.channels_max = 2,
 };
 
 static int tegra_rt5677_asoc_hw_params(struct snd_pcm_substream *substream,
@@ -74,6 +81,13 @@ static int tegra_rt5677_asoc_hw_params(struct snd_pcm_substream *substream,
 		return err;
 	}
 
+	/* both dai interfaces use the same bit clock,
+	* set rate for both interfaces the same, otherwise driver might not
+	* be able to configure clock divider.
+	*/
+	tegra_rt5677_spk_params.rate_min = srate;
+	tegra_rt5677_spk_params.rate_max = srate;
+
 	return 0;
 }
 
@@ -93,12 +107,28 @@ static int tegra_rt5677_event_hp(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
+static int tegra_rt5677_event_speaker(struct snd_soc_dapm_widget *w,
+			struct snd_kcontrol *k, int event)
+{
+	struct snd_soc_dapm_context *dapm = w->dapm;
+	struct snd_soc_card *card = dapm->card;
+	struct tegra_rt5677 *machine = snd_soc_card_get_drvdata(card);
+
+	if (!gpio_is_valid(machine->gpio_speaker_en))
+		return 0;
+
+	gpio_set_value_cansleep(machine->gpio_speaker_en,
+		SND_SOC_DAPM_EVENT_ON(event));
+
+	return 0;
+}
+
 static struct snd_soc_ops tegra_rt5677_ops = {
 	.hw_params = tegra_rt5677_asoc_hw_params,
 };
 
 static const struct snd_soc_dapm_widget tegra_rt5677_dapm_widgets[] = {
-	SND_SOC_DAPM_SPK("Speaker", NULL),
+	SND_SOC_DAPM_SPK("Speaker", tegra_rt5677_event_speaker),
 	SND_SOC_DAPM_HP("Headphone", tegra_rt5677_event_hp),
 	SND_SOC_DAPM_MIC("Headset Mic", NULL),
 	SND_SOC_DAPM_MIC("Internal Mic 1", NULL),
@@ -147,21 +177,33 @@ static struct snd_soc_aux_dev tegra_rt5677_headset_dev = {
 	.init = tegra_rt5677_headset_init,
 };
 
-static struct snd_soc_dai_link tegra_rt5677_dai = {
-	.name = "RT5677",
-	.stream_name = "RT5677 PCM",
-	.codec_dai_name = "rt5677-aif1",
-	.init = tegra_rt5677_asoc_init,
-	.ops = &tegra_rt5677_ops,
-	.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
+static struct snd_soc_dai_link tegra_rt5677_dai[] = {
+	{
+		.name = "RT5677",
+		.stream_name = "RT5677 PCM",
+		.codec_dai_name = "rt5677-aif1",
+		.init = tegra_rt5677_asoc_init,
+		.ops = &tegra_rt5677_ops,
+		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
+				SND_SOC_DAIFMT_CBS_CFS,
+	}, {
+		.name = "MAX98357A",
+		.stream_name = "Speaker",
+		.codec_name = "snd-soc-dummy",
+		.cpu_dai_name = "rt5677-aif2",
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 			SND_SOC_DAIFMT_CBS_CFS,
+		.params = &tegra_rt5677_spk_params,
+		.playback_only = true,
+	}
 };
 
 static struct snd_soc_card snd_soc_tegra_rt5677 = {
 	.name = "tegra-rt5677",
 	.owner = THIS_MODULE,
-	.dai_link = &tegra_rt5677_dai,
-	.num_links = 1,
+	.dai_link = tegra_rt5677_dai,
+	.num_links = ARRAY_SIZE(tegra_rt5677_dai),
 	.aux_dev = &tegra_rt5677_headset_dev,
 	.num_aux_devs = 1,
 	.controls = tegra_rt5677_controls,
@@ -177,6 +219,7 @@ static int tegra_rt5677_probe(struct platform_device *pdev)
 	struct snd_soc_card *card = &snd_soc_tegra_rt5677;
 	struct tegra_rt5677 *machine;
 	int ret;
+	struct snd_soc_dai_link *codec_dai = &tegra_rt5677_dai[0];
 
 #if defined(CONFIG_MODULES) && defined(MODULE)
 	request_module("snd_soc_tegra30_i2s");
@@ -203,6 +246,20 @@ static int tegra_rt5677_probe(struct platform_device *pdev)
 		}
 	}
 
+	machine->gpio_speaker_en = of_get_named_gpio(np,
+		"nvidia,spkr-en-gpios", 0);
+	if (machine->gpio_speaker_en == -EPROBE_DEFER)
+		return -EPROBE_DEFER;
+	if (gpio_is_valid(machine->gpio_speaker_en)) {
+		ret = devm_gpio_request_one(&pdev->dev,
+			machine->gpio_speaker_en, GPIOF_OUT_INIT_LOW,
+			"speaker_en");
+		if (ret) {
+			dev_err(card->dev, "cannot get speaker_en gpio\n");
+			return ret;
+		}
+	}
+
 	machine->gpio_dmic_clk_en = of_get_named_gpio(np,
 		"nvidia,dmic-clk-en-gpios", 0);
 	if (machine->gpio_dmic_clk_en == -EPROBE_DEFER)
@@ -225,24 +282,24 @@ static int tegra_rt5677_probe(struct platform_device *pdev)
 	if (ret)
 		goto err;
 
-	tegra_rt5677_dai.codec_of_node = of_parse_phandle(np,
+	codec_dai->codec_of_node = of_parse_phandle(np,
 			"nvidia,audio-codec", 0);
-	if (!tegra_rt5677_dai.codec_of_node) {
+	if (!codec_dai->codec_of_node) {
 		dev_err(&pdev->dev,
 			"Property 'nvidia,audio-codec' missing or invalid\n");
 		ret = -EINVAL;
 		goto err;
 	}
 
-	tegra_rt5677_dai.cpu_of_node = of_parse_phandle(np,
+	codec_dai->cpu_of_node = of_parse_phandle(np,
 			"nvidia,i2s-controller", 0);
-	if (!tegra_rt5677_dai.cpu_of_node) {
+	if (!codec_dai->cpu_of_node) {
 		dev_err(&pdev->dev,
 			"Property 'nvidia,i2s-controller' missing or invalid\n");
 		ret = -EINVAL;
 		goto err;
 	}
-	tegra_rt5677_dai.platform_of_node = tegra_rt5677_dai.cpu_of_node;
+	codec_dai->platform_of_node = codec_dai->cpu_of_node;
 
 	tegra_rt5677_headset_dev.codec_of_node = of_parse_phandle(np,
 		"nvidia,headset-codec", 0);
