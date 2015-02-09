@@ -21,16 +21,6 @@ enum {
 
 struct dw_hdmi;
 
-struct dw_hdmi_audio_data {
-	int irq;
-	struct dw_hdmi *dw;
-
-	u8 (*read)(struct dw_hdmi *hdmi, int offset);
-	void (*write)(struct dw_hdmi *hdmi, u8 val, int offset);
-	void (*mod)(struct dw_hdmi *hdmi, u8 data, u8 mask, unsigned reg);
-	void (*set_sample_rate)(struct dw_hdmi *hdmi, unsigned int rate);
-};
-
 enum dw_hdmi_devtype {
 	IMX6Q_HDMI,
 	IMX6DL_HDMI,
@@ -55,6 +45,19 @@ struct dw_hdmi_phy_config {
 	u16 sym_ctr;    /*clock symbol and transmitter control*/
 	u16 term;       /*transmission termination value*/
 	u16 vlev_ctr;   /* voltage level control */
+};
+
+struct dw_hdmi_audio_data {
+	int irq;
+	struct dw_hdmi *dw;
+
+	u8 (*read)(struct dw_hdmi *hdmi, int offset);
+	void (*write)(struct dw_hdmi *hdmi, u8 val, int offset);
+	void (*mod)(struct dw_hdmi *hdmi, u8 data, u8 mask, unsigned reg);
+
+	void (*enable)(struct dw_hdmi *hdmi);
+	void (*disable)(struct dw_hdmi *hdmi);
+	void (*set_sample_rate)(struct dw_hdmi *hdmi, unsigned int rate);
 };
 
 struct dw_hdmi_plat_data {
