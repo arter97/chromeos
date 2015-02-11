@@ -72,65 +72,70 @@
 #include "mvm.h"
 #include "iwl-debug.h"
 
+#define EVENT_PRIO_ANT(_evt, _prio, _shrd_ant)			\
+	[(_evt)] = (((_prio) << BT_COEX_PRIO_TBL_PRIO_POS) |	\
+		   ((_shrd_ant) << BT_COEX_PRIO_TBL_SHRD_ANT_POS))
+
+static const u8 iwl_bt_prio_tbl[BT_COEX_PRIO_TBL_EVT_MAX] = {
+	EVENT_PRIO_ANT(BT_COEX_PRIO_TBL_EVT_INIT_CALIB1,
+		       BT_COEX_PRIO_TBL_PRIO_BYPASS, 0),
+	EVENT_PRIO_ANT(BT_COEX_PRIO_TBL_EVT_INIT_CALIB2,
+		       BT_COEX_PRIO_TBL_PRIO_BYPASS, 1),
+	EVENT_PRIO_ANT(BT_COEX_PRIO_TBL_EVT_PERIODIC_CALIB_LOW1,
+		       BT_COEX_PRIO_TBL_PRIO_LOW, 0),
+	EVENT_PRIO_ANT(BT_COEX_PRIO_TBL_EVT_PERIODIC_CALIB_LOW2,
+		       BT_COEX_PRIO_TBL_PRIO_LOW, 1),
+	EVENT_PRIO_ANT(BT_COEX_PRIO_TBL_EVT_PERIODIC_CALIB_HIGH1,
+		       BT_COEX_PRIO_TBL_PRIO_HIGH, 0),
+	EVENT_PRIO_ANT(BT_COEX_PRIO_TBL_EVT_PERIODIC_CALIB_HIGH2,
+		       BT_COEX_PRIO_TBL_PRIO_HIGH, 1),
+	EVENT_PRIO_ANT(BT_COEX_PRIO_TBL_EVT_DTIM,
+		       BT_COEX_PRIO_TBL_DISABLED, 0),
+	EVENT_PRIO_ANT(BT_COEX_PRIO_TBL_EVT_SCAN52,
+		       BT_COEX_PRIO_TBL_PRIO_COEX_OFF, 0),
+	EVENT_PRIO_ANT(BT_COEX_PRIO_TBL_EVT_SCAN24,
+		       BT_COEX_PRIO_TBL_PRIO_COEX_ON, 0),
+	EVENT_PRIO_ANT(BT_COEX_PRIO_TBL_EVT_IDLE,
+		       BT_COEX_PRIO_TBL_PRIO_COEX_IDLE, 0),
+	0, 0, 0, 0, 0, 0,
+};
+
+#undef EVENT_PRIO_ANT
+
+#define BT_ENABLE_REDUCED_TXPOWER_THRESHOLD	(-62)
+#define BT_DISABLE_REDUCED_TXPOWER_THRESHOLD	(-65)
 #define BT_ANTENNA_COUPLING_THRESHOLD		(30)
 
-const u32 iwl_bt_ctl_kill_msk[BT_KILL_MSK_MAX] = {
-	[BT_KILL_MSK_DEFAULT] = 0xfffffc00,
-	[BT_KILL_MSK_NEVER] = 0xffffffff,
-	[BT_KILL_MSK_ALWAYS] = 0,
+int iwl_send_bt_prio_tbl(struct iwl_mvm *mvm)
+{
+	if (!(mvm->fw->ucode_capa.flags & IWL_UCODE_TLV_FLAGS_NEWBT_COEX))
+		return 0;
+
+	if (unlikely(mvm->bt_force_ant_mode != BT_FORCE_ANT_DIS))
+		return 0;
+
+	return iwl_mvm_send_cmd_pdu(mvm, BT_COEX_PRIO_TABLE, CMD_SYNC,
+				    sizeof(struct iwl_bt_coex_prio_tbl_cmd),
+				    &iwl_bt_prio_tbl);
+}
+
+const u32 iwl_bt_ack_kill_msk[BT_KILL_MSK_MAX] = {
+	[BT_KILL_MSK_DEFAULT] = 0xffff0000,
+	[BT_KILL_MSK_SCO_HID_A2DP] = 0xffffffff,
+	[BT_KILL_MSK_REDUCED_TXPOW] = 0,
 };
 
-const u8 iwl_bt_cts_kill_msk[BT_MAX_AG][BT_COEX_MAX_LUT] = {
-	{
-		BT_KILL_MSK_ALWAYS,
-		BT_KILL_MSK_ALWAYS,
-		BT_KILL_MSK_ALWAYS,
-	},
-	{
-		BT_KILL_MSK_NEVER,
-		BT_KILL_MSK_NEVER,
-		BT_KILL_MSK_NEVER,
-	},
-	{
-		BT_KILL_MSK_NEVER,
-		BT_KILL_MSK_NEVER,
-		BT_KILL_MSK_NEVER,
-	},
-	{
-		BT_KILL_MSK_DEFAULT,
-		BT_KILL_MSK_NEVER,
-		BT_KILL_MSK_DEFAULT,
-	},
-};
-
-const u8 iwl_bt_ack_kill_msk[BT_MAX_AG][BT_COEX_MAX_LUT] = {
-	{
-		BT_KILL_MSK_ALWAYS,
-		BT_KILL_MSK_ALWAYS,
-		BT_KILL_MSK_ALWAYS,
-	},
-	{
-		BT_KILL_MSK_ALWAYS,
-		BT_KILL_MSK_ALWAYS,
-		BT_KILL_MSK_ALWAYS,
-	},
-	{
-		BT_KILL_MSK_ALWAYS,
-		BT_KILL_MSK_ALWAYS,
-		BT_KILL_MSK_ALWAYS,
-	},
-	{
-		BT_KILL_MSK_DEFAULT,
-		BT_KILL_MSK_ALWAYS,
-		BT_KILL_MSK_DEFAULT,
-	},
+const u32 iwl_bt_cts_kill_msk[BT_KILL_MSK_MAX] = {
+	[BT_KILL_MSK_DEFAULT] = 0xffff0000,
+	[BT_KILL_MSK_SCO_HID_A2DP] = 0xffffffff,
+	[BT_KILL_MSK_REDUCED_TXPOW] = 0,
 };
 
 static const __le32 iwl_bt_prio_boost[BT_COEX_BOOST_SIZE] = {
-	cpu_to_le32(0xf0f0f0f0), /* 50% */
-	cpu_to_le32(0xc0c0c0c0), /* 25% */
-	cpu_to_le32(0xfcfcfcfc), /* 75% */
-	cpu_to_le32(0xfefefefe), /* 87.5% */
+	cpu_to_le32(0xf0f0f0f0),
+	cpu_to_le32(0xc0c0c0c0),
+	cpu_to_le32(0xfcfcfcfc),
+	cpu_to_le32(0xff00ff00),
 };
 
 static const __le32 iwl_single_shared_ant[BT_COEX_MAX_LUT][BT_COEX_LUT_SIZE] = {
@@ -190,7 +195,7 @@ static const __le32 iwl_combined_lookup[BT_COEX_MAX_LUT][BT_COEX_LUT_SIZE] = {
 		cpu_to_le32(0xcc00aaaa),
 		cpu_to_le32(0x0000aaaa),
 		cpu_to_le32(0xc0004000),
-		cpu_to_le32(0x00004000),
+		cpu_to_le32(0x00000000),
 		cpu_to_le32(0xf0005000),
 		cpu_to_le32(0xf0005000),
 	},
@@ -213,16 +218,16 @@ static const __le32 iwl_combined_lookup[BT_COEX_MAX_LUT][BT_COEX_LUT_SIZE] = {
 		/* Tx Tx disabled */
 		cpu_to_le32(0xaaaaaaaa),
 		cpu_to_le32(0xaaaaaaaa),
-		cpu_to_le32(0xeeaaaaaa),
+		cpu_to_le32(0xaaaaaaaa),
 		cpu_to_le32(0xaaaaaaaa),
 		cpu_to_le32(0xcc00ff28),
 		cpu_to_le32(0x0000aaaa),
 		cpu_to_le32(0xcc00aaaa),
 		cpu_to_le32(0x0000aaaa),
-		cpu_to_le32(0xc0004000),
-		cpu_to_le32(0xc0004000),
-		cpu_to_le32(0xf0005000),
-		cpu_to_le32(0xf0005000),
+		cpu_to_le32(0xC0004000),
+		cpu_to_le32(0xC0004000),
+		cpu_to_le32(0xF0005000),
+		cpu_to_le32(0xF0005000),
 	},
 };
 
@@ -303,8 +308,8 @@ static const __le64 iwl_ci_mask[][3] = {
 };
 
 static const __le32 iwl_bt_mprio_lut[BT_COEX_MULTI_PRIO_LUT_SIZE] = {
-	cpu_to_le32(0x2e402280),
-	cpu_to_le32(0x7711a751),
+	cpu_to_le32(0x22002200),
+	cpu_to_le32(0x33113311),
 };
 
 struct corunning_block_luts {
@@ -522,7 +527,6 @@ iwl_get_coex_type(struct iwl_mvm *mvm, const struct ieee80211_vif *vif)
 	struct ieee80211_chanctx_conf *chanctx_conf;
 	enum iwl_bt_coex_lut_type ret;
 	u16 phy_ctx_id;
-	u32 primary_ch_phy_id, secondary_ch_phy_id;
 
 	/*
 	 * Checking that we hold mvm->mutex is a good idea, but the rate
@@ -539,7 +543,7 @@ iwl_get_coex_type(struct iwl_mvm *mvm, const struct ieee80211_vif *vif)
 	if (!chanctx_conf ||
 	     chanctx_conf->def.chan->band != IEEE80211_BAND_2GHZ) {
 		rcu_read_unlock();
-		return BT_COEX_INVALID_LUT;
+		return BT_COEX_LOOSE_LUT;
 	}
 
 	ret = BT_COEX_TX_DIS_LUT;
@@ -550,13 +554,10 @@ iwl_get_coex_type(struct iwl_mvm *mvm, const struct ieee80211_vif *vif)
 	}
 
 	phy_ctx_id = *((u16 *)chanctx_conf->drv_priv);
-	primary_ch_phy_id = le32_to_cpu(mvm->last_bt_ci_cmd.primary_ch_phy_id);
-	secondary_ch_phy_id =
-		le32_to_cpu(mvm->last_bt_ci_cmd.secondary_ch_phy_id);
 
-	if (primary_ch_phy_id == phy_ctx_id)
+	if (mvm->last_bt_ci_cmd.primary_ch_phy_id == phy_ctx_id)
 		ret = le32_to_cpu(mvm->last_bt_notif.primary_ch_lut);
-	else if (secondary_ch_phy_id == phy_ctx_id)
+	else if (mvm->last_bt_ci_cmd.secondary_ch_phy_id == phy_ctx_id)
 		ret = le32_to_cpu(mvm->last_bt_notif.secondary_ch_lut);
 	/* else - default = TX TX disallowed */
 
@@ -572,12 +573,13 @@ int iwl_send_bt_init_conf(struct iwl_mvm *mvm)
 		.id = BT_CONFIG,
 		.len = { sizeof(*bt_cmd), },
 		.dataflags = { IWL_HCMD_DFL_NOCOPY, },
+		.flags = CMD_SYNC,
 	};
 	int ret;
-	u32 mode;
+	u32 flags;
 
-	if (!(mvm->fw->ucode_capa.api[0] & IWL_UCODE_TLV_API_BT_COEX_SPLIT))
-		return iwl_send_bt_init_conf_old(mvm);
+	if (!(mvm->fw->ucode_capa.flags & IWL_UCODE_TLV_FLAGS_NEWBT_COEX))
+		return 0;
 
 	bt_cmd = kzalloc(sizeof(*bt_cmd), GFP_KERNEL);
 	if (!bt_cmd)
@@ -588,46 +590,64 @@ int iwl_send_bt_init_conf(struct iwl_mvm *mvm)
 
 	if (unlikely(mvm->bt_force_ant_mode != BT_FORCE_ANT_DIS)) {
 		switch (mvm->bt_force_ant_mode) {
+		case BT_FORCE_ANT_AUTO:
+			flags = BT_COEX_AUTO;
+			break;
 		case BT_FORCE_ANT_BT:
-			mode = BT_COEX_BT;
+			flags = BT_COEX_BT;
 			break;
 		case BT_FORCE_ANT_WIFI:
-			mode = BT_COEX_WIFI;
+			flags = BT_COEX_WIFI;
 			break;
 		default:
 			WARN_ON(1);
-			mode = 0;
+			flags = 0;
 		}
 
-		bt_cmd->mode = cpu_to_le32(mode);
+		bt_cmd->flags = cpu_to_le32(flags);
+		bt_cmd->valid_bit_msk = cpu_to_le32(BT_VALID_ENABLE);
 		goto send_cmd;
 	}
 
-	bt_cmd->max_kill = cpu_to_le32(5);
-	bt_cmd->bt4_antenna_isolation_thr =
-				cpu_to_le32(BT_ANTENNA_COUPLING_THRESHOLD);
-	bt_cmd->bt4_tx_tx_delta_freq_thr = cpu_to_le32(15);
-	bt_cmd->bt4_tx_rx_max_freq0 = cpu_to_le32(15);
-	bt_cmd->override_primary_lut = cpu_to_le32(BT_COEX_INVALID_LUT);
-	bt_cmd->override_secondary_lut = cpu_to_le32(BT_COEX_INVALID_LUT);
+	bt_cmd->max_kill = 5;
+	bt_cmd->bt4_antenna_isolation_thr = BT_ANTENNA_COUPLING_THRESHOLD,
+	bt_cmd->bt4_antenna_isolation = iwlwifi_mod_params.ant_coupling,
+	bt_cmd->bt4_tx_tx_delta_freq_thr = 15,
+	bt_cmd->bt4_tx_rx_max_freq0 = 15,
 
-	mode = iwlwifi_mod_params.bt_coex_active ? BT_COEX_NW : BT_COEX_DISABLE;
-	bt_cmd->mode = cpu_to_le32(mode);
+	flags = iwlwifi_mod_params.bt_coex_active ?
+			BT_COEX_NW : BT_COEX_DISABLE;
+	bt_cmd->flags = cpu_to_le32(flags);
+
+	bt_cmd->valid_bit_msk = cpu_to_le32(BT_VALID_ENABLE |
+					    BT_VALID_BT_PRIO_BOOST |
+					    BT_VALID_MAX_KILL |
+					    BT_VALID_3W_TMRS |
+					    BT_VALID_KILL_ACK |
+					    BT_VALID_KILL_CTS |
+					    BT_VALID_REDUCED_TX_POWER |
+					    BT_VALID_LUT |
+					    BT_VALID_WIFI_RX_SW_PRIO_BOOST |
+					    BT_VALID_WIFI_TX_SW_PRIO_BOOST |
+					    BT_VALID_ANT_ISOLATION |
+					    BT_VALID_ANT_ISOLATION_THRS |
+					    BT_VALID_TXTX_DELTA_FREQ_THRS |
+					    BT_VALID_TXRX_MAX_FREQ_0 |
+					    BT_VALID_SYNC_TO_SCO);
 
 	if (IWL_MVM_BT_COEX_SYNC2SCO)
-		bt_cmd->enabled_modules |=
-			cpu_to_le32(BT_COEX_SYNC2SCO_ENABLED);
+		bt_cmd->flags |= cpu_to_le32(BT_COEX_SYNC2SCO);
 
-	if (IWL_MVM_BT_COEX_CORUNNING)
-		bt_cmd->enabled_modules |= cpu_to_le32(BT_COEX_CORUN_ENABLED);
-
-	if (IWL_MVM_BT_COEX_MPLUT) {
-		bt_cmd->enabled_modules |= cpu_to_le32(BT_COEX_MPLUT_ENABLED);
-		bt_cmd->enabled_modules |=
-			cpu_to_le32(BT_COEX_MPLUT_BOOST_ENABLED);
+	if (IWL_MVM_BT_COEX_CORUNNING) {
+		bt_cmd->valid_bit_msk |= cpu_to_le32(BT_VALID_CORUN_LUT_20 |
+						     BT_VALID_CORUN_LUT_40);
+		bt_cmd->flags |= cpu_to_le32(BT_COEX_CORUNNING);
 	}
 
-	bt_cmd->enabled_modules |= cpu_to_le32(BT_COEX_HIGH_BAND_RET);
+	if (IWL_MVM_BT_COEX_MPLUT) {
+		bt_cmd->flags |= cpu_to_le32(BT_COEX_MPLUT);
+		bt_cmd->valid_bit_msk |= cpu_to_le32(BT_VALID_MULTI_PRIO_LUT);
+	}
 
 	if (mvm->cfg->bt_shared_single_ant)
 		memcpy(&bt_cmd->decision_lut, iwl_single_shared_ant,
@@ -636,10 +656,20 @@ int iwl_send_bt_init_conf(struct iwl_mvm *mvm)
 		memcpy(&bt_cmd->decision_lut, iwl_combined_lookup,
 		       sizeof(iwl_combined_lookup));
 
-	memcpy(&bt_cmd->mplut_prio_boost, iwl_bt_prio_boost,
+	/* Take first Co-running block LUT to get started */
+	memcpy(bt_cmd->bt4_corun_lut20, antenna_coupling_ranges[0].lut20,
+	       sizeof(bt_cmd->bt4_corun_lut20));
+	memcpy(bt_cmd->bt4_corun_lut40, antenna_coupling_ranges[0].lut20,
+	       sizeof(bt_cmd->bt4_corun_lut40));
+
+	memcpy(&bt_cmd->bt_prio_boost, iwl_bt_prio_boost,
 	       sizeof(iwl_bt_prio_boost));
-	memcpy(&bt_cmd->multiprio_lut, iwl_bt_mprio_lut,
+	memcpy(&bt_cmd->bt4_multiprio_lut, iwl_bt_mprio_lut,
 	       sizeof(iwl_bt_mprio_lut));
+	bt_cmd->kill_ack_msk =
+		cpu_to_le32(iwl_bt_ack_kill_msk[BT_KILL_MSK_DEFAULT]);
+	bt_cmd->kill_cts_msk =
+		cpu_to_le32(iwl_bt_cts_kill_msk[BT_KILL_MSK_DEFAULT]);
 
 send_cmd:
 	memset(&mvm->last_bt_notif, 0, sizeof(mvm->last_bt_notif));
@@ -651,54 +681,82 @@ send_cmd:
 	return ret;
 }
 
-static int iwl_mvm_bt_udpate_sw_boost(struct iwl_mvm *mvm)
+static int iwl_mvm_bt_udpate_ctrl_kill_msk(struct iwl_mvm *mvm,
+					   bool reduced_tx_power)
 {
+	enum iwl_bt_kill_msk bt_kill_msk;
+	struct iwl_bt_coex_cmd *bt_cmd;
 	struct iwl_bt_coex_profile_notif *notif = &mvm->last_bt_notif;
-	u32 primary_lut = le32_to_cpu(notif->primary_ch_lut);
-	u32 secondary_lut = le32_to_cpu(notif->secondary_ch_lut);
-	u32 ag = le32_to_cpu(notif->bt_activity_grading);
-	struct iwl_bt_coex_sw_boost_update_cmd cmd = {};
-	u8 ack_kill_msk[NUM_PHY_CTX] = {};
-	u8 cts_kill_msk[NUM_PHY_CTX] = {};
-	int i;
+	struct iwl_host_cmd cmd = {
+		.id = BT_CONFIG,
+		.data[0] = &bt_cmd,
+		.len = { sizeof(*bt_cmd), },
+		.dataflags = { IWL_HCMD_DFL_NOCOPY, },
+		.flags = CMD_SYNC,
+	};
+	int ret = 0;
 
 	lockdep_assert_held(&mvm->mutex);
 
-	ack_kill_msk[0] = iwl_bt_ack_kill_msk[ag][primary_lut];
-	cts_kill_msk[0] = iwl_bt_cts_kill_msk[ag][primary_lut];
-
-	ack_kill_msk[1] = iwl_bt_ack_kill_msk[ag][secondary_lut];
-	cts_kill_msk[1] = iwl_bt_cts_kill_msk[ag][secondary_lut];
-
-	/* Don't send HCMD if there is no update */
-	if (!memcmp(ack_kill_msk, mvm->bt_ack_kill_msk, sizeof(ack_kill_msk)) ||
-	    !memcmp(cts_kill_msk, mvm->bt_cts_kill_msk, sizeof(cts_kill_msk)))
-		return 0;
-
-	memcpy(mvm->bt_ack_kill_msk, ack_kill_msk,
-	       sizeof(mvm->bt_ack_kill_msk));
-	memcpy(mvm->bt_cts_kill_msk, cts_kill_msk,
-	       sizeof(mvm->bt_cts_kill_msk));
-
-	BUILD_BUG_ON(ARRAY_SIZE(ack_kill_msk) < ARRAY_SIZE(cmd.boost_values));
-
-	for (i = 0; i < ARRAY_SIZE(cmd.boost_values); i++) {
-		cmd.boost_values[i].kill_ack_msk =
-			cpu_to_le32(iwl_bt_ctl_kill_msk[ack_kill_msk[i]]);
-		cmd.boost_values[i].kill_cts_msk =
-			cpu_to_le32(iwl_bt_ctl_kill_msk[cts_kill_msk[i]]);
+	if (reduced_tx_power) {
+		/* Reduced Tx power has precedence on the type of the profile */
+		bt_kill_msk = BT_KILL_MSK_REDUCED_TXPOW;
+	} else {
+		/* Low latency BT profile is active: give higher prio to BT */
+		if (BT_MBOX_MSG(notif, 3, SCO_STATE)  ||
+		    BT_MBOX_MSG(notif, 3, A2DP_STATE) ||
+		    BT_MBOX_MSG(notif, 3, SNIFF_STATE))
+			bt_kill_msk = BT_KILL_MSK_SCO_HID_A2DP;
+		else
+			bt_kill_msk = BT_KILL_MSK_DEFAULT;
 	}
 
-	return iwl_mvm_send_cmd_pdu(mvm, BT_COEX_UPDATE_SW_BOOST, 0,
-				    sizeof(cmd), &cmd);
+	IWL_DEBUG_COEX(mvm,
+		       "Update kill_msk: %d - SCO %sactive A2DP %sactive SNIFF %sactive\n",
+		       bt_kill_msk,
+		       BT_MBOX_MSG(notif, 3, SCO_STATE) ? "" : "in",
+		       BT_MBOX_MSG(notif, 3, A2DP_STATE) ? "" : "in",
+		       BT_MBOX_MSG(notif, 3, SNIFF_STATE) ? "" : "in");
+
+	/* Don't send HCMD if there is no update */
+	if (bt_kill_msk == mvm->bt_kill_msk)
+		return 0;
+
+	mvm->bt_kill_msk = bt_kill_msk;
+
+	bt_cmd = kzalloc(sizeof(*bt_cmd), GFP_KERNEL);
+	if (!bt_cmd)
+		return -ENOMEM;
+	cmd.data[0] = bt_cmd;
+	bt_cmd->flags = cpu_to_le32(BT_COEX_NW);
+
+	bt_cmd->kill_ack_msk = cpu_to_le32(iwl_bt_ack_kill_msk[bt_kill_msk]);
+	bt_cmd->kill_cts_msk = cpu_to_le32(iwl_bt_cts_kill_msk[bt_kill_msk]);
+	bt_cmd->valid_bit_msk |= cpu_to_le32(BT_VALID_ENABLE |
+					     BT_VALID_KILL_ACK |
+					     BT_VALID_KILL_CTS);
+
+	IWL_DEBUG_COEX(mvm, "ACK Kill msk = 0x%08x, CTS Kill msk = 0x%08x\n",
+		       iwl_bt_ack_kill_msk[bt_kill_msk],
+		       iwl_bt_cts_kill_msk[bt_kill_msk]);
+
+	ret = iwl_mvm_send_cmd(mvm, &cmd);
+
+	kfree(bt_cmd);
+	return ret;
 }
 
-static int iwl_mvm_bt_coex_reduced_txp(struct iwl_mvm *mvm, u8 sta_id,
-				       bool enable)
+int iwl_mvm_bt_coex_reduced_txp(struct iwl_mvm *mvm, u8 sta_id, bool enable)
 {
-	struct iwl_bt_coex_reduced_txp_update_cmd cmd = {};
+	struct iwl_bt_coex_cmd *bt_cmd;
+	/* Send ASYNC since this can be sent from an atomic context */
+	struct iwl_host_cmd cmd = {
+		.id = BT_CONFIG,
+		.len = { sizeof(*bt_cmd), },
+		.dataflags = { IWL_HCMD_DFL_NOCOPY, },
+		.flags = CMD_ASYNC,
+	};
 	struct iwl_mvm_sta *mvmsta;
-	u32 value;
 	int ret;
 
 	mvmsta = iwl_mvm_sta_from_staid_protected(mvm, sta_id);
@@ -706,29 +764,39 @@ static int iwl_mvm_bt_coex_reduced_txp(struct iwl_mvm *mvm, u8 sta_id,
 		return 0;
 
 	/* nothing to do */
-	if (mvmsta->bt_reduced_txpower == enable)
+	if (mvmsta->bt_reduced_txpower_dbg ||
+	    mvmsta->bt_reduced_txpower == enable)
 		return 0;
 
-	value = mvmsta->sta_id;
+	bt_cmd = kzalloc(sizeof(*bt_cmd), GFP_ATOMIC);
+	if (!bt_cmd)
+		return -ENOMEM;
+	cmd.data[0] = bt_cmd;
+	bt_cmd->flags = cpu_to_le32(BT_COEX_NW);
+
+	bt_cmd->valid_bit_msk =
+		cpu_to_le32(BT_VALID_ENABLE | BT_VALID_REDUCED_TX_POWER);
+	bt_cmd->bt_reduced_tx_power = sta_id;
 
 	if (enable)
-		value |= BT_REDUCED_TX_POWER_BIT;
+		bt_cmd->bt_reduced_tx_power |= BT_REDUCED_TX_POWER_BIT;
 
 	IWL_DEBUG_COEX(mvm, "%sable reduced Tx Power for sta %d\n",
 		       enable ? "en" : "dis", sta_id);
 
-	cmd.reduced_txp = cpu_to_le32(value);
 	mvmsta->bt_reduced_txpower = enable;
 
-	ret = iwl_mvm_send_cmd_pdu(mvm, BT_COEX_UPDATE_REDUCED_TXP, CMD_ASYNC,
-				   sizeof(cmd), &cmd);
+	ret = iwl_mvm_send_cmd(mvm, &cmd);
 
+	kfree(bt_cmd);
 	return ret;
 }
 
 struct iwl_bt_iterator_data {
 	struct iwl_bt_coex_profile_notif *notif;
 	struct iwl_mvm *mvm;
+	u32 num_bss_ifaces;
+	bool reduced_tx_power;
 	struct ieee80211_chanctx_conf *primary;
 	struct ieee80211_chanctx_conf *secondary;
 	bool primary_ll;
@@ -743,9 +811,9 @@ void iwl_mvm_bt_coex_enable_rssi_event(struct iwl_mvm *mvm,
 
 	mvmvif->bf_data.last_bt_coex_event = rssi;
 	mvmvif->bf_data.bt_coex_max_thold =
-		enable ? -IWL_MVM_BT_COEX_EN_RED_TXP_THRESH : 0;
+		enable ? BT_ENABLE_REDUCED_TXPOWER_THRESHOLD : 0;
 	mvmvif->bf_data.bt_coex_min_thold =
-		enable ? -IWL_MVM_BT_COEX_DIS_RED_TXP_THRESH : 0;
+		enable ? BT_DISABLE_REDUCED_TXPOWER_THRESHOLD : 0;
 }
 
 /* must be called under rcu_read_lock */
@@ -766,10 +834,33 @@ static void iwl_mvm_bt_notif_iterator(void *_data, u8 *mac,
 	case NL80211_IFTYPE_STATION:
 		/* default smps_mode for BSS / P2P client is AUTOMATIC */
 		smps_mode = IEEE80211_SMPS_AUTOMATIC;
+		data->num_bss_ifaces++;
+
+		/*
+		 * Count unassoc BSSes, relax SMSP constraints
+		 * and disable reduced Tx Power
+		 */
+		if (!vif->bss_conf.assoc) {
+			iwl_mvm_update_smps(mvm, vif, IWL_MVM_SMPS_REQ_BT_COEX,
+					    smps_mode);
+			if (iwl_mvm_bt_coex_reduced_txp(mvm,
+							mvmvif->ap_sta_id,
+							false))
+				IWL_ERR(mvm, "Couldn't send BT_CONFIG cmd\n");
+			return;
+		}
 		break;
 	case NL80211_IFTYPE_AP:
-		if (!mvmvif->ap_ibss_active)
+		/* default smps_mode for AP / GO is OFF */
+		smps_mode = IEEE80211_SMPS_OFF;
+		if (!mvmvif->ap_ibss_active) {
+			iwl_mvm_update_smps(mvm, vif, IWL_MVM_SMPS_REQ_BT_COEX,
+					    smps_mode);
 			return;
+		}
+
+		/* the Ack / Cts kill mask must be default if AP / GO */
+		data->reduced_tx_power = false;
 		break;
 	default:
 		return;
@@ -780,14 +871,11 @@ static void iwl_mvm_bt_notif_iterator(void *_data, u8 *mac,
 	/* If channel context is invalid or not on 2.4GHz .. */
 	if ((!chanctx_conf ||
 	     chanctx_conf->def.chan->band != IEEE80211_BAND_2GHZ)) {
-		if (vif->type == NL80211_IFTYPE_STATION) {
-			/* ... relax constraints and disable rssi events */
-			iwl_mvm_update_smps(mvm, vif, IWL_MVM_SMPS_REQ_BT_COEX,
-					    smps_mode);
-			iwl_mvm_bt_coex_reduced_txp(mvm, mvmvif->ap_sta_id,
-						    false);
+		/* ... relax constraints and disable rssi events */
+		iwl_mvm_update_smps(mvm, vif, IWL_MVM_SMPS_REQ_BT_COEX,
+				    smps_mode);
+		if (vif->type == NL80211_IFTYPE_STATION)
 			iwl_mvm_bt_coex_enable_rssi_event(mvm, vif, false, 0);
-		}
 		return;
 	}
 
@@ -795,23 +883,15 @@ static void iwl_mvm_bt_notif_iterator(void *_data, u8 *mac,
 	if (bt_activity_grading >= BT_HIGH_TRAFFIC)
 		smps_mode = IEEE80211_SMPS_STATIC;
 	else if (bt_activity_grading >= BT_LOW_TRAFFIC)
-		smps_mode = IEEE80211_SMPS_DYNAMIC;
-
-	/* relax SMPS contraints for next association */
-	if (!vif->bss_conf.assoc)
-		smps_mode = IEEE80211_SMPS_AUTOMATIC;
-
-	if (IWL_COEX_IS_RRC_ON(mvm->last_bt_notif.ttc_rrc_status,
-			       mvmvif->phy_ctxt->id))
-		smps_mode = IEEE80211_SMPS_AUTOMATIC;
-
+		smps_mode = vif->type == NL80211_IFTYPE_AP ?
+				IEEE80211_SMPS_OFF :
+				IEEE80211_SMPS_DYNAMIC;
 	IWL_DEBUG_COEX(data->mvm,
-		       "mac %d: bt_activity_grading %d smps_req %d\n",
-		       mvmvif->id, bt_activity_grading, smps_mode);
+		       "mac %d: bt_status %d bt_activity_grading %d smps_req %d\n",
+		       mvmvif->id, data->notif->bt_status, bt_activity_grading,
+		       smps_mode);
 
-	if (vif->type == NL80211_IFTYPE_STATION)
-		iwl_mvm_update_smps(mvm, vif, IWL_MVM_SMPS_REQ_BT_COEX,
-				    smps_mode);
+	iwl_mvm_update_smps(mvm, vif, IWL_MVM_SMPS_REQ_BT_COEX, smps_mode);
 
 	/* low latency is always primary */
 	if (iwl_mvm_vif_low_latency(mvmvif)) {
@@ -852,17 +932,22 @@ static void iwl_mvm_bt_notif_iterator(void *_data, u8 *mac,
 		/* if secondary is not NULL, it might be a GO */
 		data->secondary = chanctx_conf;
 
-	/*
-	 * don't reduce the Tx power if one of these is true:
-	 *  we are in LOOSE
-	 *  single share antenna product
-	 *  BT is active
-	 *  we are associated
-	 */
+	/* don't reduce the Tx power if in loose scheme */
 	if (iwl_get_coex_type(mvm, vif) == BT_COEX_LOOSE_LUT ||
-	    mvm->cfg->bt_shared_single_ant || !vif->bss_conf.assoc ||
-	    le32_to_cpu(mvm->last_bt_notif.bt_activity_grading) == BT_OFF) {
-		iwl_mvm_bt_coex_reduced_txp(mvm, mvmvif->ap_sta_id, false);
+	    mvm->cfg->bt_shared_single_ant) {
+		data->reduced_tx_power = false;
+		iwl_mvm_bt_coex_enable_rssi_event(mvm, vif, false, 0);
+		return;
+	}
+
+	/* reduced Txpower only if BT is on, so ...*/
+	if (!data->notif->bt_status) {
+		/* ... cancel reduced Tx power ... */
+		if (iwl_mvm_bt_coex_reduced_txp(mvm, mvmvif->ap_sta_id, false))
+			IWL_ERR(mvm, "Couldn't send BT_CONFIG cmd\n");
+		data->reduced_tx_power = false;
+
+		/* ... and there is no need to get reports on RSSI any more. */
 		iwl_mvm_bt_coex_enable_rssi_event(mvm, vif, false, 0);
 		return;
 	}
@@ -873,12 +958,26 @@ static void iwl_mvm_bt_notif_iterator(void *_data, u8 *mac,
 	/* if the RSSI isn't valid, fake it is very low */
 	if (!ave_rssi)
 		ave_rssi = -100;
-	if (ave_rssi > -IWL_MVM_BT_COEX_EN_RED_TXP_THRESH) {
+	if (ave_rssi > BT_ENABLE_REDUCED_TXPOWER_THRESHOLD) {
 		if (iwl_mvm_bt_coex_reduced_txp(mvm, mvmvif->ap_sta_id, true))
 			IWL_ERR(mvm, "Couldn't send BT_CONFIG cmd\n");
-	} else if (ave_rssi < -IWL_MVM_BT_COEX_DIS_RED_TXP_THRESH) {
+
+		/*
+		 * bt_kill_msk can be BT_KILL_MSK_REDUCED_TXPOW only if all the
+		 * BSS / P2P clients have rssi above threshold.
+		 * We set the bt_kill_msk to BT_KILL_MSK_REDUCED_TXPOW before
+		 * the iteration, if one interface's rssi isn't good enough,
+		 * bt_kill_msk will be set to default values.
+		 */
+	} else if (ave_rssi < BT_DISABLE_REDUCED_TXPOWER_THRESHOLD) {
 		if (iwl_mvm_bt_coex_reduced_txp(mvm, mvmvif->ap_sta_id, false))
 			IWL_ERR(mvm, "Couldn't send BT_CONFIG cmd\n");
+
+		/*
+		 * One interface hasn't rssi above threshold, bt_kill_msk must
+		 * be set to default values.
+		 */
+		data->reduced_tx_power = false;
 	}
 
 	/* Begin to monitor the RSSI: it may influence the reduced Tx power */
@@ -890,6 +989,7 @@ static void iwl_mvm_bt_coex_notif_handle(struct iwl_mvm *mvm)
 	struct iwl_bt_iterator_data data = {
 		.mvm = mvm,
 		.notif = &mvm->last_bt_notif,
+		.reduced_tx_power = true,
 	};
 	struct iwl_bt_coex_ci_cmd cmd = {};
 	u8 ci_bw_idx;
@@ -912,7 +1012,9 @@ static void iwl_mvm_bt_coex_notif_handle(struct iwl_mvm *mvm)
 
 		if (chan->def.width < NL80211_CHAN_WIDTH_40) {
 			ci_bw_idx = 0;
+			cmd.co_run_bw_primary = 0;
 		} else {
+			cmd.co_run_bw_primary = 1;
 			if (chan->def.center_freq1 >
 			    chan->def.chan->center_freq)
 				ci_bw_idx = 2;
@@ -922,8 +1024,7 @@ static void iwl_mvm_bt_coex_notif_handle(struct iwl_mvm *mvm)
 
 		cmd.bt_primary_ci =
 			iwl_ci_mask[chan->def.chan->hw_value][ci_bw_idx];
-		cmd.primary_ch_phy_id =
-			cpu_to_le32(*((u16 *)data.primary->drv_priv));
+		cmd.primary_ch_phy_id = *((u16 *)data.primary->drv_priv);
 	}
 
 	if (data.secondary) {
@@ -935,7 +1036,9 @@ static void iwl_mvm_bt_coex_notif_handle(struct iwl_mvm *mvm)
 
 		if (chan->def.width < NL80211_CHAN_WIDTH_40) {
 			ci_bw_idx = 0;
+			cmd.co_run_bw_secondary = 0;
 		} else {
+			cmd.co_run_bw_secondary = 1;
 			if (chan->def.center_freq1 >
 			    chan->def.chan->center_freq)
 				ci_bw_idx = 2;
@@ -945,24 +1048,31 @@ static void iwl_mvm_bt_coex_notif_handle(struct iwl_mvm *mvm)
 
 		cmd.bt_secondary_ci =
 			iwl_ci_mask[chan->def.chan->hw_value][ci_bw_idx];
-		cmd.secondary_ch_phy_id =
-			cpu_to_le32(*((u16 *)data.secondary->drv_priv));
+		cmd.secondary_ch_phy_id = *((u16 *)data.secondary->drv_priv);
 	}
 
 	rcu_read_unlock();
 
 	/* Don't spam the fw with the same command over and over */
 	if (memcmp(&cmd, &mvm->last_bt_ci_cmd, sizeof(cmd))) {
-		if (iwl_mvm_send_cmd_pdu(mvm, BT_COEX_CI, 0,
+		if (iwl_mvm_send_cmd_pdu(mvm, BT_COEX_CI, CMD_SYNC,
 					 sizeof(cmd), &cmd))
-			IWL_ERR(mvm, "Failed to send BT_CI cmd\n");
+			IWL_ERR(mvm, "Failed to send BT_CI cmd");
 		memcpy(&mvm->last_bt_ci_cmd, &cmd, sizeof(cmd));
 	}
 
-	if (iwl_mvm_bt_udpate_sw_boost(mvm))
+	/*
+	 * If there are no BSS / P2P client interfaces, reduced Tx Power is
+	 * irrelevant since it is based on the RSSI coming from the beacon.
+	 * Use BT_KILL_MSK_DEFAULT in that case.
+	 */
+	data.reduced_tx_power = data.reduced_tx_power && data.num_bss_ifaces;
+
+	if (iwl_mvm_bt_udpate_ctrl_kill_msk(mvm, data.reduced_tx_power))
 		IWL_ERR(mvm, "Failed to update the ctrl_kill_msk\n");
 }
 
+/* upon association, the fw will send in BT Coex notification */
 int iwl_mvm_rx_bt_coex_notif(struct iwl_mvm *mvm,
 			     struct iwl_rx_cmd_buffer *rxb,
 			     struct iwl_device_cmd *dev_cmd)
@@ -970,10 +1080,11 @@ int iwl_mvm_rx_bt_coex_notif(struct iwl_mvm *mvm,
 	struct iwl_rx_packet *pkt = rxb_addr(rxb);
 	struct iwl_bt_coex_profile_notif *notif = (void *)pkt->data;
 
-	if (!(mvm->fw->ucode_capa.api[0] & IWL_UCODE_TLV_API_BT_COEX_SPLIT))
-		return iwl_mvm_rx_bt_coex_notif_old(mvm, rxb, dev_cmd);
 
 	IWL_DEBUG_COEX(mvm, "BT Coex Notification received\n");
+	IWL_DEBUG_COEX(mvm, "\tBT status: %s\n",
+		       notif->bt_status ? "ON" : "OFF");
+	IWL_DEBUG_COEX(mvm, "\tBT open conn %d\n", notif->bt_open_conn);
 	IWL_DEBUG_COEX(mvm, "\tBT ci compliance %d\n", notif->bt_ci_compliance);
 	IWL_DEBUG_COEX(mvm, "\tBT primary_ch_lut %d\n",
 		       le32_to_cpu(notif->primary_ch_lut));
@@ -981,6 +1092,8 @@ int iwl_mvm_rx_bt_coex_notif(struct iwl_mvm *mvm,
 		       le32_to_cpu(notif->secondary_ch_lut));
 	IWL_DEBUG_COEX(mvm, "\tBT activity grading %d\n",
 		       le32_to_cpu(notif->bt_activity_grading));
+	IWL_DEBUG_COEX(mvm, "\tBT agg traffic load %d\n",
+		       notif->bt_agg_traffic_load);
 
 	/* remember this notification for future use: rssi fluctuations */
 	memcpy(&mvm->last_bt_notif, notif, sizeof(mvm->last_bt_notif));
@@ -1028,6 +1141,16 @@ static void iwl_mvm_bt_rssi_iterator(void *_data, u8 *mac,
 		return;
 
 	mvmsta = iwl_mvm_sta_from_mac80211(sta);
+
+	data->num_bss_ifaces++;
+
+	/*
+	 * This interface doesn't support reduced Tx power (because of low
+	 * RSSI probably), then set bt_kill_msk to default values.
+	 */
+	if (!mvmsta->bt_reduced_txpower)
+		data->reduced_tx_power = false;
+	/* else - possibly leave it to BT_KILL_MSK_REDUCED_TXPOW */
 }
 
 void iwl_mvm_bt_rssi_event(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
@@ -1036,13 +1159,9 @@ void iwl_mvm_bt_rssi_event(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 	struct iwl_mvm_vif *mvmvif = (void *)vif->drv_priv;
 	struct iwl_bt_iterator_data data = {
 		.mvm = mvm,
+		.reduced_tx_power = true,
 	};
 	int ret;
-
-	if (!(mvm->fw->ucode_capa.api[0] & IWL_UCODE_TLV_API_BT_COEX_SPLIT)) {
-		iwl_mvm_bt_rssi_event_old(mvm, vif, rssi_event);
-		return;
-	}
 
 	lockdep_assert_held(&mvm->mutex);
 
@@ -1058,7 +1177,7 @@ void iwl_mvm_bt_rssi_event(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 		return;
 
 	/* No BT - reports should be disabled */
-	if (le32_to_cpu(mvm->last_bt_notif.bt_activity_grading) == BT_OFF)
+	if (!mvm->last_bt_notif.bt_status)
 		return;
 
 	IWL_DEBUG_COEX(mvm, "RSSI for %pM is now %s\n", vif->bss_conf.bssid,
@@ -1082,7 +1201,14 @@ void iwl_mvm_bt_rssi_event(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 		mvm->hw, IEEE80211_IFACE_ITER_NORMAL,
 		iwl_mvm_bt_rssi_iterator, &data);
 
-	if (iwl_mvm_bt_udpate_sw_boost(mvm))
+	/*
+	 * If there are no BSS / P2P client interfaces, reduced Tx Power is
+	 * irrelevant since it is based on the RSSI coming from the beacon.
+	 * Use BT_KILL_MSK_DEFAULT in that case.
+	 */
+	data.reduced_tx_power = data.reduced_tx_power && data.num_bss_ifaces;
+
+	if (iwl_mvm_bt_udpate_ctrl_kill_msk(mvm, data.reduced_tx_power))
 		IWL_ERR(mvm, "Failed to update the ctrl_kill_msk\n");
 }
 
@@ -1093,15 +1219,7 @@ u16 iwl_mvm_coex_agg_time_limit(struct iwl_mvm *mvm,
 				struct ieee80211_sta *sta)
 {
 	struct iwl_mvm_sta *mvmsta = iwl_mvm_sta_from_mac80211(sta);
-	struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(mvmsta->vif);
-	struct iwl_mvm_phy_ctxt *phy_ctxt = mvmvif->phy_ctxt;
 	enum iwl_bt_coex_lut_type lut_type;
-
-	if (!(mvm->fw->ucode_capa.api[0] & IWL_UCODE_TLV_API_BT_COEX_SPLIT))
-		return iwl_mvm_coex_agg_time_limit_old(mvm, sta);
-
-	if (IWL_COEX_IS_TTC_ON(mvm->last_bt_notif.ttc_rrc_status, phy_ctxt->id))
-		return LINK_QUAL_AGG_TIME_LIMIT_DEF;
 
 	if (le32_to_cpu(mvm->last_bt_notif.bt_activity_grading) <
 	    BT_HIGH_TRAFFIC)
@@ -1109,7 +1227,7 @@ u16 iwl_mvm_coex_agg_time_limit(struct iwl_mvm *mvm,
 
 	lut_type = iwl_get_coex_type(mvm, mvmsta->vif);
 
-	if (lut_type == BT_COEX_LOOSE_LUT || lut_type == BT_COEX_INVALID_LUT)
+	if (lut_type == BT_COEX_LOOSE_LUT)
 		return LINK_QUAL_AGG_TIME_LIMIT_DEF;
 
 	/* tight coex, high bt traffic, reduce AGG time limit */
@@ -1120,59 +1238,24 @@ bool iwl_mvm_bt_coex_is_mimo_allowed(struct iwl_mvm *mvm,
 				     struct ieee80211_sta *sta)
 {
 	struct iwl_mvm_sta *mvmsta = iwl_mvm_sta_from_mac80211(sta);
-	struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(mvmsta->vif);
-	struct iwl_mvm_phy_ctxt *phy_ctxt = mvmvif->phy_ctxt;
-	enum iwl_bt_coex_lut_type lut_type;
-
-	if (!(mvm->fw->ucode_capa.api[0] & IWL_UCODE_TLV_API_BT_COEX_SPLIT))
-		return iwl_mvm_bt_coex_is_mimo_allowed_old(mvm, sta);
-
-	if (IWL_COEX_IS_TTC_ON(mvm->last_bt_notif.ttc_rrc_status, phy_ctxt->id))
-		return true;
 
 	if (le32_to_cpu(mvm->last_bt_notif.bt_activity_grading) <
 	    BT_HIGH_TRAFFIC)
 		return true;
 
 	/*
-	 * In Tight / TxTxDis, BT can't Rx while we Tx, so use both antennas
-	 * since BT is already killed.
-	 * In Loose, BT can Rx while we Tx, so forbid MIMO to let BT Rx while
-	 * we Tx.
-	 * When we are in 5GHz, we'll get BT_COEX_INVALID_LUT allowing MIMO.
+	 * In Tight, BT can't Rx while we Tx, so use both antennas since BT is
+	 * already killed.
+	 * In Loose, BT can Rx while we Tx, so forbid MIMO to let BT Rx while we
+	 * Tx.
 	 */
-	lut_type = iwl_get_coex_type(mvm, mvmsta->vif);
-	return lut_type != BT_COEX_LOOSE_LUT;
-}
-
-bool iwl_mvm_bt_coex_is_ant_avail(struct iwl_mvm *mvm, u8 ant)
-{
-	/* there is no other antenna, shared antenna is always available */
-	if (mvm->cfg->bt_shared_single_ant)
-		return true;
-
-	if (!(mvm->fw->ucode_capa.api[0] & IWL_UCODE_TLV_API_BT_COEX_SPLIT))
-		return iwl_mvm_bt_coex_is_shared_ant_avail_old(mvm);
-
-	return le32_to_cpu(mvm->last_bt_notif.bt_activity_grading) <
-		BT_HIGH_TRAFFIC;
-}
-
-bool iwl_mvm_bt_coex_is_shared_ant_avail(struct iwl_mvm *mvm)
-{
-	if (!(mvm->fw->ucode_capa.api[0] & IWL_UCODE_TLV_API_BT_COEX_SPLIT))
-		return iwl_mvm_bt_coex_is_shared_ant_avail_old(mvm);
-
-	return le32_to_cpu(mvm->last_bt_notif.bt_activity_grading) == BT_OFF;
+	return iwl_get_coex_type(mvm, mvmsta->vif) == BT_COEX_TIGHT_LUT;
 }
 
 bool iwl_mvm_bt_coex_is_tpc_allowed(struct iwl_mvm *mvm,
 				    enum ieee80211_band band)
 {
 	u32 bt_activity = le32_to_cpu(mvm->last_bt_notif.bt_activity_grading);
-
-	if (!(mvm->fw->ucode_capa.api[0] & IWL_UCODE_TLV_API_BT_COEX_SPLIT))
-		return iwl_mvm_bt_coex_is_tpc_allowed_old(mvm, band);
 
 	if (band != IEEE80211_BAND_2GHZ)
 		return false;
@@ -1214,10 +1297,8 @@ u8 iwl_mvm_bt_coex_tx_prio(struct iwl_mvm *mvm, struct ieee80211_hdr *hdr,
 
 void iwl_mvm_bt_coex_vif_change(struct iwl_mvm *mvm)
 {
-	if (!(mvm->fw->ucode_capa.api[0] & IWL_UCODE_TLV_API_BT_COEX_SPLIT)) {
-		iwl_mvm_bt_coex_vif_change_old(mvm);
+	if (!(mvm->fw->ucode_capa.flags & IWL_UCODE_TLV_FLAGS_NEWBT_COEX))
 		return;
-	}
 
 	iwl_mvm_bt_coex_notif_handle(mvm);
 }
@@ -1228,12 +1309,16 @@ int iwl_mvm_rx_ant_coupling_notif(struct iwl_mvm *mvm,
 {
 	struct iwl_rx_packet *pkt = rxb_addr(rxb);
 	u32 ant_isolation = le32_to_cpup((void *)pkt->data);
-	struct iwl_bt_coex_corun_lut_update_cmd cmd = {};
 	u8 __maybe_unused lower_bound, upper_bound;
 	u8 lut;
 
-	if (!(mvm->fw->ucode_capa.api[0] & IWL_UCODE_TLV_API_BT_COEX_SPLIT))
-		return iwl_mvm_rx_ant_coupling_notif_old(mvm, rxb, dev_cmd);
+	struct iwl_bt_coex_cmd *bt_cmd;
+	struct iwl_host_cmd cmd = {
+		.id = BT_CONFIG,
+		.len = { sizeof(*bt_cmd), },
+		.dataflags = { IWL_HCMD_DFL_NOCOPY, },
+		.flags = CMD_SYNC,
+	};
 
 	if (!IWL_MVM_BT_COEX_CORUNNING)
 		return 0;
@@ -1268,14 +1353,23 @@ int iwl_mvm_rx_ant_coupling_notif(struct iwl_mvm *mvm,
 
 	mvm->last_corun_lut = lut;
 
+	bt_cmd = kzalloc(sizeof(*bt_cmd), GFP_KERNEL);
+	if (!bt_cmd)
+		return 0;
+	cmd.data[0] = bt_cmd;
+
+	bt_cmd->flags = cpu_to_le32(BT_COEX_NW);
+	bt_cmd->valid_bit_msk |= cpu_to_le32(BT_VALID_ENABLE |
+					     BT_VALID_CORUN_LUT_20 |
+					     BT_VALID_CORUN_LUT_40);
+
 	/* For the moment, use the same LUT for 20GHz and 40GHz */
-	memcpy(&cmd.corun_lut20, antenna_coupling_ranges[lut].lut20,
-	       sizeof(cmd.corun_lut20));
+	memcpy(bt_cmd->bt4_corun_lut20, antenna_coupling_ranges[lut].lut20,
+	       sizeof(bt_cmd->bt4_corun_lut20));
 
-	memcpy(&cmd.corun_lut40, antenna_coupling_ranges[lut].lut20,
-	       sizeof(cmd.corun_lut40));
+	memcpy(bt_cmd->bt4_corun_lut40, antenna_coupling_ranges[lut].lut20,
+	       sizeof(bt_cmd->bt4_corun_lut40));
 
-	return iwl_mvm_send_cmd_pdu(mvm, BT_COEX_UPDATE_CORUN_LUT, 0,
-				    sizeof(cmd), &cmd);
+	kfree(bt_cmd);
+	return 0;
 }
-

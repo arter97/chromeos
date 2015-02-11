@@ -35,8 +35,7 @@ int __ieee80211_suspend(struct ieee80211_hw *hw, struct cfg80211_wowlan *wowlan)
 
 	ieee80211_stop_queues_by_reason(hw,
 					IEEE80211_MAX_QUEUE_MAP,
-					IEEE80211_QUEUE_STOP_REASON_SUSPEND,
-					false);
+					IEEE80211_QUEUE_STOP_REASON_SUSPEND);
 
 	/* flush out all packets */
 	synchronize_net();
@@ -75,8 +74,7 @@ int __ieee80211_suspend(struct ieee80211_hw *hw, struct cfg80211_wowlan *wowlan)
 			}
 			ieee80211_wake_queues_by_reason(hw,
 					IEEE80211_MAX_QUEUE_MAP,
-					IEEE80211_QUEUE_STOP_REASON_SUSPEND,
-					false);
+					IEEE80211_QUEUE_STOP_REASON_SUSPEND);
 			return err;
 		} else if (err > 0) {
 			WARN_ON(err != 1);

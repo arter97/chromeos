@@ -97,7 +97,6 @@ struct iwl_tm_gnl_dev {
 	struct iwl_dnt *dnt;
 	struct iwl_trans *trans;
 	const char *dev_name;
-	u32 nl_events_portid;
 };
 
 /**
@@ -157,5 +156,7 @@ static inline int iwl_tm_gnl_exit(void)
 #define ADDR_IN_AL_MSK (0x80000000)
 #define GET_AL_ADDR(ofs) (ofs & ~(ADDR_IN_AL_MSK))
 #define IS_AL_ADDR(ofs) (!!(ofs & (ADDR_IN_AL_MSK)))
+
+#define DEFAULT_BUF_SIZE	(0x3cff * sizeof(u32))
 
 #endif
