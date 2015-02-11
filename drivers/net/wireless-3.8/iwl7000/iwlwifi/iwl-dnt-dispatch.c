@@ -413,15 +413,12 @@ static u32 iwl_dnt_dispatch_create_crash_tlv(struct iwl_trans *trans,
 	struct iwl_fw_error_dump_file *dump_file;
 	struct iwl_fw_error_dump_data *cur_tlv;
 	struct iwl_dnt *dnt = trans->tmdev->dnt;
-	struct dnt_crash_data *crash;
+	struct dnt_crash_data *crash = &dnt->dispatch.crash;
 	u32 total_size;
-
 	if (!dnt) {
 		IWL_DEBUG_INFO(trans, "DnT is not intialized\n");
 		return 0;
 	}
-
-	crash = &dnt->dispatch.crash;
 
 	/*
 	 * data will be represetned as TLV - each buffer is represented as
