@@ -3688,7 +3688,9 @@ static int rt5677_hw_params(struct snd_pcm_substream *substream,
 			RT5677_I2S_DL_MASK, val_len);
 		regmap_update_bits(rt5677->regmap, RT5677_CLK_TREE_CTRL1,
 			mask_clk, val_clk);
-		break;
+		/* Workaround for p4 speaker bug.
+		   I2S2 should be initialized with the same clock as I2S1.
+		break; */
 	case RT5677_AIF2:
 		mask_clk = RT5677_I2S_PD2_MASK;
 		val_clk = pre_div << RT5677_I2S_PD2_SFT;
