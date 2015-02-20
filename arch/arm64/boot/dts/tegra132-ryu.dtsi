@@ -451,7 +451,8 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		card-reset-gpios = <&gpio TEGRA_GPIO(X, 7) GPIO_ACTIVE_LOW>;
+		card-reset-gpios = <&gpio TEGRA_GPIO(X, 1) GPIO_ACTIVE_LOW>,
+				   <&gpio TEGRA_GPIO(X, 7) GPIO_ACTIVE_LOW>;
 		bus-width = <4>;
 		no-1-8-v;
 		non-removable;
