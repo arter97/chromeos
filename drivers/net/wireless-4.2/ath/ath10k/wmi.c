@@ -190,6 +190,9 @@ static struct wmi_cmd_map wmi_cmd_map = {
 	.mu_cal_start_cmdid = WMI_CMD_UNSUPPORTED,
 	.set_cca_params_cmdid = WMI_CMD_UNSUPPORTED,
 	.pdev_bss_chan_info_request_cmdid = WMI_CMD_UNSUPPORTED,
+#ifdef CONFIG_ATH10K_SMART_ANTENNA
+	.pdev_set_smart_ant_cmdid = WMI_CMD_UNSUPPORTED,
+#endif
 };
 
 /* 10.X WMI cmd track */
@@ -355,6 +358,9 @@ static struct wmi_cmd_map wmi_10x_cmd_map = {
 	.mu_cal_start_cmdid = WMI_CMD_UNSUPPORTED,
 	.set_cca_params_cmdid = WMI_CMD_UNSUPPORTED,
 	.pdev_bss_chan_info_request_cmdid = WMI_CMD_UNSUPPORTED,
+#ifdef CONFIG_ATH10K_SMART_ANTENNA
+	.pdev_set_smart_ant_cmdid = WMI_CMD_UNSUPPORTED,
+#endif
 };
 
 /* 10.2.4 WMI cmd track */
@@ -519,6 +525,9 @@ static struct wmi_cmd_map wmi_10_2_4_cmd_map = {
 	.mu_cal_start_cmdid = WMI_CMD_UNSUPPORTED,
 	.set_cca_params_cmdid = WMI_CMD_UNSUPPORTED,
 	.pdev_bss_chan_info_request_cmdid = WMI_CMD_UNSUPPORTED,
+#ifdef CONFIG_ATH10K_SMART_ANTENNA
+	.pdev_set_smart_ant_cmdid = WMI_10_2_PDEV_SMART_ANT_ENABLE_CMDID,
+#endif
 };
 
 /* 10.4 WMI cmd track */
@@ -1439,6 +1448,9 @@ static struct wmi_cmd_map wmi_10_2_cmd_map = {
 	.pdev_get_ani_cck_config_cmdid = WMI_CMD_UNSUPPORTED,
 	.pdev_get_ani_ofdm_config_cmdid = WMI_CMD_UNSUPPORTED,
 	.pdev_reserve_ast_entry_cmdid = WMI_CMD_UNSUPPORTED,
+#ifdef CONFIG_ATH10K_SMART_ANTENNA
+	.pdev_set_smart_ant_cmdid = WMI_10_2_PDEV_SMART_ANT_ENABLE_CMDID,
+#endif
 };
 
 static struct wmi_pdev_param_map wmi_10_4_pdev_param_map = {
@@ -7011,6 +7023,93 @@ unlock:
 		buf[len] = 0;
 }
 
+#ifdef CONFIG_ATH10K_SMART_ANTENNA
+static void
+ath10k_wmi_fill_set_smart_ant(struct ath10k *ar,
+			      struct wmi_pdev_set_smart_ant_cmd *cmd,
+			      u32 mode, u32 tx_ant, u32 rx_ant)
+{
+	cmd->mode = __cpu_to_le32(mode);
+	cmd->rx_antenna = __cpu_to_le32(rx_ant);
+	cmd->tx_default_antenna = __cpu_to_le32(tx_ant);
+	if (mode == WMI_SMART_ANT_MODE_SERIAL) {
+		/* TODO: Get gpio pins from device tree */
+		cmd->gpio_pin[0] =
+			__cpu_to_le32(WLAN_GPIOPIN_ANT_SERIAL_STROBE);
+		cmd->gpio_pin[1] = __cpu_to_le32(WLAN_GPIOPIN_ANT_SERIAL_DATA);
+		cmd->gpio_pin[2] = 0;
+		cmd->gpio_pin[3] = 0;
+
+		cmd->gpio_func[0] =
+			__cpu_to_le32(WLAN_GPIOFUNC_ANT_SERIAL_STROBE);
+		cmd->gpio_func[1] =
+			__cpu_to_le32(WLAN_GPIOFUNC_ANT_SERIAL_STROBE);
+		cmd->gpio_func[2] = 0;
+		cmd->gpio_func[3] = 0;
+	} else {
+		/* TODO: Get gpio pins from device tree */
+		cmd->gpio_pin[0] = __cpu_to_le32(WLAN_GPIOPIN_ANTCHAIN0);
+		cmd->gpio_pin[1] = __cpu_to_le32(WLAN_GPIOPIN_ANTCHAIN1);
+		cmd->gpio_pin[2] = __cpu_to_le32(WLAN_GPIOPIN_ANTCHAIN2);
+		cmd->gpio_pin[3] = 0;
+
+		cmd->gpio_func[0] = __cpu_to_le32(WLAN_GPIOFUNC_ANTCHAIN0);
+		cmd->gpio_func[1] = __cpu_to_le32(WLAN_GPIOFUNC_ANTCHAIN1);
+		cmd->gpio_func[2] = __cpu_to_le32(WLAN_GPIOFUNC_ANTCHAIN2);
+		cmd->gpio_func[3] = 0;
+	}
+}
+
+/* Sends initial smart antenna configuration. The configuration includes
+ * enabling smart antenna functionality in fw, mode used for smart antenna
+ * {mode: parallel or serial GPIOs}, initial tx/rx antenna.
+ */
+static struct sk_buff *
+ath10k_wmi_op_gen_pdev_enable_smart_ant(struct ath10k *ar, u32 mode,
+					u32 tx_ant, u32 rx_ant)
+{
+	struct wmi_pdev_set_smart_ant_cmd *cmd;
+	struct sk_buff *skb;
+
+	skb = ath10k_wmi_alloc_skb(ar, sizeof(*cmd));
+	if (!skb)
+		return ERR_PTR(-ENOMEM);
+
+	cmd = (struct wmi_pdev_set_smart_ant_cmd *)skb->data;
+	cmd->enable = __cpu_to_le32(WMI_SMART_ANT_ENABLE);
+	ath10k_wmi_fill_set_smart_ant(ar, cmd, mode, tx_ant, rx_ant);
+	ath10k_dbg(ar, ATH10K_DBG_WMI,
+		   "wmi pdev smart antenna enable, mode %d rx_ant %d def_tx_ant %d\n",
+		   mode, rx_ant, tx_ant);
+	return skb;
+}
+
+/* Sends configurations to disable smart antenna, configuration includes bit
+ * indicating disable, GPIOs, mode for which it was enabled and tx/rx antennas
+ * to be reset, usually 0 is sent in tx/rx antenna in this command.
+ */
+static struct sk_buff *
+ath10k_wmi_op_gen_pdev_disable_smart_ant(struct ath10k *ar, u32 mode,
+					 u32 tx_ant, u32 rx_ant)
+{
+	struct wmi_pdev_set_smart_ant_cmd *cmd;
+	struct sk_buff *skb;
+
+	skb = ath10k_wmi_alloc_skb(ar, sizeof(*cmd));
+	if (!skb)
+		return ERR_PTR(-ENOMEM);
+
+	cmd = (struct wmi_pdev_set_smart_ant_cmd *)skb->data;
+	cmd->enable = __cpu_to_le32(WMI_SMART_ANT_DISABLE);
+	ath10k_wmi_fill_set_smart_ant(ar, cmd, mode, tx_ant, rx_ant);
+	ath10k_dbg(ar, ATH10K_DBG_WMI,
+		   "wmi pdev smart antenna disable, mode %d rx_ant %d def_tx_ant %d\n",
+		   mode, rx_ant, tx_ant);
+	return skb;
+}
+#endif
+
+
 static const struct wmi_ops wmi_ops = {
 	.rx = ath10k_wmi_op_rx,
 	.map_svc = wmi_main_svc_map,
@@ -7074,6 +7173,8 @@ static const struct wmi_ops wmi_ops = {
 	/* .gen_prb_tmpl not implemented */
 	/* .gen_p2p_go_bcn_ie not implemented */
 	/* .gen_adaptive_qcs not implemented */
+	/* .gen_pdev_enable_smart_ant not implemented */
+	/* .gen_pdev_disable_smart_ant not implemented */
 };
 
 static const struct wmi_ops wmi_10_1_ops = {
@@ -7140,6 +7241,8 @@ static const struct wmi_ops wmi_10_1_ops = {
 	/* .gen_prb_tmpl not implemented */
 	/* .gen_p2p_go_bcn_ie not implemented */
 	/* .gen_adaptive_qcs not implemented */
+	/* .gen_pdev_enable_smart_ant not implemented */
+	/* .gen_pdev_disable_smart_ant not implemented */
 };
 
 static const struct wmi_ops wmi_10_2_ops = {
@@ -7203,6 +7306,10 @@ static const struct wmi_ops wmi_10_2_ops = {
 	.gen_addba_set_resp = ath10k_wmi_op_gen_addba_set_resp,
 	.gen_delba_send = ath10k_wmi_op_gen_delba_send,
 	.fw_stats_fill = ath10k_wmi_10x_op_fw_stats_fill,
+#ifdef CONFIG_ATH10K_SMART_ANTENNA
+	.gen_pdev_enable_smart_ant  = ath10k_wmi_op_gen_pdev_enable_smart_ant,
+	.gen_pdev_disable_smart_ant  = ath10k_wmi_op_gen_pdev_disable_smart_ant,
+#endif
 };
 
 static const struct wmi_ops wmi_10_2_4_ops = {
@@ -7270,6 +7377,10 @@ static const struct wmi_ops wmi_10_2_4_ops = {
 	/* .gen_prb_tmpl not implemented */
 	/* .gen_p2p_go_bcn_ie not implemented */
 	/* .gen_adaptive_qcs not implemented */
+#ifdef CONFIG_ATH10K_SMART_ANTENNA
+	.gen_pdev_enable_smart_ant  = ath10k_wmi_op_gen_pdev_enable_smart_ant,
+	.gen_pdev_disable_smart_ant  = ath10k_wmi_op_gen_pdev_disable_smart_ant,
+#endif
 };
 
 static const struct wmi_ops wmi_10_4_ops = {
