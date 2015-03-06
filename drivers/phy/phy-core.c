@@ -259,6 +259,7 @@ int phy_init(struct phy *phy)
 	ret = phy_pm_runtime_get_sync(phy);
 	if (ret < 0 && ret != -ENOTSUPP)
 		return ret;
+	ret = 0; /* Override possible ret == -ENOTSUPP */
 
 	mutex_lock(&phy->mutex);
 	if (phy->init_count == 0 && phy->ops->init) {
@@ -267,8 +268,6 @@ int phy_init(struct phy *phy)
 			dev_err(&phy->dev, "phy init failed --> %d\n", ret);
 			goto out;
 		}
-	} else {
-		ret = 0; /* Override possible ret == -ENOTSUPP */
 	}
 	++phy->init_count;
 
@@ -289,6 +288,7 @@ int phy_exit(struct phy *phy)
 	ret = phy_pm_runtime_get_sync(phy);
 	if (ret < 0 && ret != -ENOTSUPP)
 		return ret;
+	ret = 0; /* Override possible ret == -ENOTSUPP */
 
 	mutex_lock(&phy->mutex);
 	if (phy->init_count == 1 && phy->ops->exit) {
@@ -323,6 +323,7 @@ int phy_power_on(struct phy *phy)
 	ret = phy_pm_runtime_get_sync(phy);
 	if (ret < 0 && ret != -ENOTSUPP)
 		return ret;
+	ret = 0; /* Override possible ret == -ENOTSUPP */
 
 	mutex_lock(&phy->mutex);
 	if (phy->power_count == 0 && phy->ops->power_on) {
@@ -331,8 +332,6 @@ int phy_power_on(struct phy *phy)
 			dev_err(&phy->dev, "phy poweron failed --> %d\n", ret);
 			goto out;
 		}
-	} else {
-		ret = 0; /* Override possible ret == -ENOTSUPP */
 	}
 	++phy->power_count;
 	mutex_unlock(&phy->mutex);
