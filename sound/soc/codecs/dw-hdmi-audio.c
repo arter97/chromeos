@@ -123,6 +123,7 @@ static int snd_dw_hdmi_dai_startup(struct snd_pcm_substream *substream,
 	dev_info(codec_dai->dev, "startup.\n");
 
 	hdmi->is_playback_status = true;
+	hdmi->data.enable(hdmi->data.dw);
 
 	return 0;
 }
@@ -242,6 +243,7 @@ static void snd_dw_hdmi_dai_shutdown(struct snd_pcm_substream *substream,
 	dev_info(codec_dai->dev, "shutdown.\n");
 
 	hdmi->is_playback_status = false;
+	hdmi->data.disable(hdmi->data.dw);
 }
 
 static int snd_dw_hdmi_audio_probe(struct snd_soc_codec *codec)
