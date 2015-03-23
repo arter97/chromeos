@@ -5662,7 +5662,6 @@ static int set_external_config(struct sock *sk, struct hci_dev *hdev,
 
 			queue_work(hdev->req_workqueue, &hdev->power_on);
 		} else {
-			set_bit(HCI_RAW, &hdev->flags);
 			mgmt_index_added(hdev);
 		}
 	}

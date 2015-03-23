@@ -546,7 +546,16 @@ static int hci_sock_bound_ioctl(struct sock *sk, unsigned int cmd,
 	case HCISETRAW:
 		if (!capable(CAP_NET_ADMIN))
 			return -EPERM;
-		return -EOPNOTSUPP;
+
+		if (test_bit(HCI_QUIRK_RAW_DEVICE, &hdev->quirks))
+			return -EPERM;
+
+		if (arg)
+			set_bit(HCI_RAW, &hdev->flags);
+		else
+			clear_bit(HCI_RAW, &hdev->flags);
+
+		return 0;
 
 	case HCIGETCONNINFO:
 		return hci_get_conn_info(hdev, (void __user *) arg);
@@ -983,7 +992,7 @@ static int hci_sock_sendmsg(struct kiocb *iocb, struct socket *sock,
 			goto drop;
 		}
 
-		if (ogf == 0x3f) {
+		if (test_bit(HCI_RAW, &hdev->flags) || (ogf == 0x3f)) {
 			skb_queue_tail(&hdev->raw_q, skb);
 			queue_work(hdev->workqueue, &hdev->tx_work);
 		} else {
