@@ -2895,6 +2895,7 @@ int drm_mode_setcrtc(struct drm_device *dev, void *data,
 	uint32_t fb_id = -1;
 	uint32_t *connector_ids = NULL;
 	struct drm_atomic_state *state = NULL;
+	bool atomic_connector_ids_bound = false;
 	int ret;
 	int i;
 
@@ -2991,6 +2992,8 @@ retry:
 	if (ret)
 		goto out;
 
+	atomic_connector_ids_bound = true;
+
 	ret = drm_mode_plane_set_obj_prop(crtc->primary, state,
 			config->prop_crtc_id, crtc->base.id, NULL);
 	if (ret)
@@ -3026,7 +3029,7 @@ out:
 		dev->driver->atomic_end(dev, state);
 	}
 	mutex_unlock(&dev->mode_config.mutex);
-	if (ret)
+	if (!atomic_connector_ids_bound && ret)
 		kfree(connector_ids);
 	return ret;
 }
