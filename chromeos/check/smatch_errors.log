@@ -699,3 +699,6 @@ net/bridge/br_multicast.c:652 br_multicast_add_group() error: potential null der
 drivers/misc/lkdtm.c:301 lkdtm_do_action() error: buffer overflow 'p' 8 <= 12"
 drivers/misc/lkdtm.c:320 lkdtm_do_action() error: potential null dereference 'data'.  (kmalloc returns null)"
 drivers/misc/lkdtm.c:320 lkdtm_do_action() error: buffer overflow 'data' 255 <= 256"
+fs/dcache.c:1075 have_submounts() error: double lock 'spin_lock:&this_parent->d_lock'
+fs/dcache.c:1201 select_parent() error: double lock 'spin_lock:&this_parent->d_lock'
+fs/dcache.c:2968 d_genocide() error: double lock 'spin_lock:&this_parent->d_lock'
