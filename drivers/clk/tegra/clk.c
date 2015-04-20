@@ -82,7 +82,7 @@ static struct clk_onecell_data clk_data;
 static int (*reset_assert)(unsigned long);
 static int (*reset_deassert)(unsigned long);
 
-static struct tegra_clk_periph_regs periph_regs[] = {
+static const struct tegra_clk_periph_regs periph_regs[] = {
 	[0] = {
 		.enb_reg = CLK_OUT_ENB_L,
 		.enb_set_reg = CLK_OUT_ENB_SET_L,
@@ -180,7 +180,7 @@ static int tegra_clk_rst_deassert(struct reset_controller_dev *rcdev,
 	return -EINVAL;
 }
 
-struct tegra_clk_periph_regs *get_reg_bank(int clkid)
+const struct tegra_clk_periph_regs *get_reg_bank(int clkid)
 {
 	int reg_bank = clkid / 32;
 
