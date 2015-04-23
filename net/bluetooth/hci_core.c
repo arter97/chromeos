@@ -5442,7 +5442,8 @@ static void hci_rx_work(struct work_struct *work)
 			hci_send_to_sock(hdev, skb);
 		}
 
-		if (test_bit(HCI_USER_CHANNEL, &hdev->dev_flags)) {
+		if (test_bit(HCI_RAW, &hdev->flags) ||
+		    test_bit(HCI_USER_CHANNEL, &hdev->dev_flags)) {
 			kfree_skb(skb);
 			continue;
 		}
