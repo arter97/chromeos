@@ -17,4 +17,10 @@
 
 int rockchip_drm_fbdev_init(struct drm_device *dev);
 
+void rockchip_vop_crtc_fb_gamma_set(struct drm_crtc *crtc, u16 red, u16 green,
+				    u16 blue, int regno);
+
+void rockchip_vop_crtc_fb_gamma_get(struct drm_crtc *crtc, u16 *red, u16 *green,
+				    u16 *blue, int regno);
+
 #endif /* _ROCKCHIP_DRM_FBDEV_H */
