@@ -1785,15 +1785,6 @@ static int tegra_sor_hdmi_configure(struct tegra_sor *sor,
 	/* XXX HDMI audio support not implemented yet */
 	tegra_sor_hdmi_disable_audio_infoframe(sor);
 
-	/*
-	value = tegra_sor_readl(sor, SOR_CLK_CNTRL);
-	value &= ~SOR_CLK_CNTRL_DP_LINK_SPEED_MASK;
-	value |= SOR_CLK_CNTRL_DP_LINK_SPEED_G2_70;
-	value &= ~SOR_CLK_CNTRL_DP_CLK_SEL_MASK;
-	value |= SOR_CLK_CNTRL_DP_CLK_SEL_SINGLE_PCLK;
-	tegra_sor_writel(sor, value, SOR_CLK_CNTRL);
-	*/
-
 	/* use custom LVDS protocol */
 	value = tegra_sor_readl(sor, SOR_STATE1);
 	value &= ~SOR_STATE_ASY_PROTOCOL_MASK;
