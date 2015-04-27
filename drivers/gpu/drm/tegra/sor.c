@@ -80,20 +80,11 @@ static const struct tegra_sor_hdmi_settings tegra210_sor_hdmi_defaults[] = {
 	},
 };
 
-enum tegra_sor_mode {
-	TEGRA_SOR_EDP,
-	TEGRA_SOR_LVDS,
-	TEGRA_SOR_HDMI,
-	TEGRA_SOR_DP,
-};
-
 struct tegra_sor_soc {
 	bool supports_edp;
 	bool supports_lvds;
 	bool supports_hdmi;
 	bool supports_dp;
-
-	u32 enable;
 
 	const struct tegra_sor_hdmi_settings *settings;
 	unsigned int num_settings;
@@ -102,9 +93,13 @@ struct tegra_sor_soc {
 struct tegra_sor;
 
 struct tegra_sor_ops {
+	const char *name;
+	int (*probe)(struct tegra_sor *sor);
+	int (*remove)(struct tegra_sor *sor);
 	int (*power_up)(struct tegra_sor *sor);
 	int (*configure)(struct tegra_sor *sor,
 			 const struct drm_display_mode *mode);
+	int (*power_down)(struct tegra_sor *sor);
 };
 
 struct tegra_sor {
@@ -132,7 +127,6 @@ struct tegra_sor {
 	struct dentry *debugfs;
 
 	const struct tegra_sor_ops *ops;
-	enum tegra_sor_mode mode;
 
 	/* for HDMI 2.0 */
 	struct tegra_sor_hdmi_settings *settings;
@@ -169,15 +163,12 @@ static inline struct tegra_sor *to_sor(struct tegra_output *output)
 
 static inline u32 tegra_sor_readl(struct tegra_sor *sor, unsigned int offset)
 {
-	u32 value = readl(sor->regs + (offset << 2));
-	//pr_info("sor: %08x > %08x\n", offset, value);
-	return value;
+	return readl(sor->regs + (offset << 2));
 }
 
 static inline void tegra_sor_writel(struct tegra_sor *sor, u32 value,
 				    unsigned int offset)
 {
-	//pr_info("sor: %08x < %08x\n", offset, value);
 	writel(value, sor->regs + (offset << 2));
 }
 
@@ -642,6 +633,12 @@ static int tegra_sor_power_down(struct tegra_sor *sor)
 	unsigned long value, timeout;
 	int err;
 
+	err = sor->ops->power_down(sor);
+	if (err < 0) {
+		dev_err(sor->dev, "failed to power down SOR: %d\n", err);
+		return err;
+	}
+
 	value = tegra_sor_readl(sor, SOR_PWR);
 	value &= ~SOR_PWR_NORMAL_STATE_PU;
 	value |= SOR_PWR_TRIGGER;
@@ -1049,6 +1046,7 @@ static void tegra_sor_encoder_commit(struct drm_encoder *encoder)
 {
 }
 
+#if 0
 static int calc_h_ref_to_sync(const struct drm_display_mode *mode,
 			      unsigned int *value)
 {
@@ -1058,10 +1056,17 @@ static int calc_h_ref_to_sync(const struct drm_display_mode *mode,
 	hsw = mode->hsync_end - mode->hsync_start;
 	hbp = mode->htotal - mode->hsync_end;
 
+	pr_info("hfp: %u, hsw: %u, hbp: %u\n", hfp, hsw, hbp);
+
 	b = hfp - 1;
 
-	if (a + hsw + hbp <= 11)
+	pr_info("a: %u, b: %u\n", a, b);
+	pr_info("a + hsw + hbp = %u\n", a + hsw + hbp);
+
+	if (a + hsw + hbp <= 11) {
 		a = 1 + 11 - hsw - hbp;
+		pr_info("a: %u\n", a);
+	}
 
 	if (a > b)
 		return -EINVAL;
@@ -1079,6 +1084,17 @@ static int calc_h_ref_to_sync(const struct drm_display_mode *mode,
 			*value = a;
 	}
 
+	return 0;
+}
+#endif
+
+static int tegra_sor_edp_probe(struct tegra_sor *sor)
+{
+	return 0;
+}
+
+static int tegra_sor_edp_remove(struct tegra_sor *sor)
+{
 	return 0;
 }
 
@@ -1154,7 +1170,7 @@ static int tegra_sor_edp_power_up(struct tegra_sor *sor)
 	/* step 2 */
 	err = tegra_io_rail_power_on(TEGRA_IO_RAIL_LVDS);
 	if (err < 0) {
-		dev_err(sor->dev, "failed to power on I/O rail: %d\n", err);
+		dev_err(sor->dev, "failed to power on LVDS rail: %d\n", err);
 		return err;
 	}
 
@@ -1191,6 +1207,7 @@ static int tegra_sor_edp_configure(struct tegra_sor *sor,
 				   const struct drm_display_mode *mode)
 {
 	struct drm_display_info *info = &sor->output.connector.display_info;
+	struct tegra_dc *dc = to_tegra_dc(sor->output.encoder.crtc);
 	/* FIXME: properly convert to struct drm_dp_aux */
 	struct drm_dp_aux *aux = (struct drm_dp_aux *)sor->dpaux;
 	struct tegra_sor_config config;
@@ -1388,13 +1405,103 @@ static int tegra_sor_edp_configure(struct tegra_sor *sor,
 	value |= SOR_STATE_ASY_PROTOCOL_DP_A;
 	tegra_sor_writel(sor, value, SOR_STATE1);
 
+	/* enable display to SOR clock */
+	value = tegra_dc_readl(dc, DC_DISP_DISP_WIN_OPTIONS);
+	value |= SOR_ENABLE;
+	tegra_dc_writel(dc, value, DC_DISP_DISP_WIN_OPTIONS);
+
+	tegra_dc_commit(dc);
+
+	return 0;
+}
+
+static int tegra_sor_edp_power_down(struct tegra_sor *sor)
+{
+	struct tegra_dc *dc = to_tegra_dc(sor->output.encoder.crtc);
+	u32 value;
+	int err;
+
+	/* disable display to SOR clock */
+	value = tegra_dc_readl(dc, DC_DISP_DISP_WIN_OPTIONS);
+	value &= ~SOR_ENABLE;
+	tegra_dc_writel(dc, value, DC_DISP_DISP_WIN_OPTIONS);
+
+	tegra_dc_commit(dc);
+
+	err = tegra_io_rail_power_off(TEGRA_IO_RAIL_LVDS);
+	if (err < 0) {
+		dev_err(sor->dev, "failed to power off LVDS rail: %d\n", err);
+		return err;
+	}
+
 	return 0;
 }
 
 static const struct tegra_sor_ops tegra_sor_edp_ops = {
+	.name = "eDP",
+	.probe = tegra_sor_edp_probe,
+	.remove = tegra_sor_edp_remove,
 	.power_up = tegra_sor_edp_power_up,
 	.configure = tegra_sor_edp_configure,
+	.power_down = tegra_sor_edp_power_down,
 };
+
+static int tegra_sor_hdmi_probe(struct tegra_sor *sor)
+{
+	int err;
+
+	sor->avdd_io_supply = devm_regulator_get(sor->dev, "avdd-io");
+	if (IS_ERR(sor->avdd_io_supply)) {
+		dev_err(sor->dev, "cannot get AVDD I/O supply: %ld\n",
+			PTR_ERR(sor->avdd_io_supply));
+		return PTR_ERR(sor->avdd_io_supply);
+	}
+
+	err = regulator_enable(sor->avdd_io_supply);
+	if (err < 0) {
+		dev_err(sor->dev, "failed to enable AVDD I/O supply: %d\n",
+			err);
+		return err;
+	}
+
+	sor->vdd_pll_supply = devm_regulator_get(sor->dev, "vdd-pll");
+	if (IS_ERR(sor->vdd_pll_supply)) {
+		dev_err(sor->dev, "cannot get VDD PLL supply: %ld\n",
+			PTR_ERR(sor->vdd_pll_supply));
+		return PTR_ERR(sor->vdd_pll_supply);
+	}
+
+	err = regulator_enable(sor->vdd_pll_supply);
+	if (err < 0) {
+		dev_err(sor->dev, "failed to enable VDD PLL supply: %d\n",
+			err);
+		return err;
+	}
+
+	sor->hdmi_supply = devm_regulator_get(sor->dev, "hdmi");
+	if (IS_ERR(sor->hdmi_supply)) {
+		dev_err(sor->dev, "cannot get HDMI supply: %ld\n",
+			PTR_ERR(sor->hdmi_supply));
+		return PTR_ERR(sor->hdmi_supply);
+	}
+
+	err = regulator_enable(sor->hdmi_supply);
+	if (err < 0) {
+		dev_err(sor->dev, "failed to enable HDMI supply: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+
+static int tegra_sor_hdmi_remove(struct tegra_sor *sor)
+{
+	regulator_disable(sor->hdmi_supply);
+	regulator_disable(sor->vdd_pll_supply);
+	regulator_disable(sor->avdd_io_supply);
+
+	return 0;
+}
 
 static int tegra_sor_hdmi_power_up(struct tegra_sor *sor)
 {
@@ -1403,8 +1510,10 @@ static int tegra_sor_hdmi_power_up(struct tegra_sor *sor)
 	int err;
 
 	err = tegra_io_rail_power_on(TEGRA_IO_RAIL_HDMI);
-	if (err < 0)
+	if (err < 0) {
+		dev_err(sor->dev, "failed to power on HDMI rail: %d\n", err);
 		return err;
+	}
 
 	usleep_range(5, 100);
 
@@ -1472,13 +1581,12 @@ static int tegra_sor_hdmi_power_up(struct tegra_sor *sor)
 		usleep_range(250, 1000);
 	}
 
-#if 0
 	value = tegra_sor_readl(sor, SOR_CLK_CNTRL);
-	dev_info(sor->dev, "SOR_CLK_CNTRL: %08x\n", value);
-	dev_info(sor->dev, "  DP_LINK_SPEED: %02x\n", (value >> 2) & 0x1f);
-	dev_info(sor->dev, "  DP_CLK_SEL: %02x\n", value & 0x3);
-	/* XXX; need to modify this based on pixel clock frequency */
-#endif
+	value &= ~SOR_CLK_CNTRL_DP_LINK_SPEED_MASK;
+	value |= SOR_CLK_CNTRL_DP_LINK_SPEED_G2_70;
+	value &= ~SOR_CLK_CNTRL_DP_CLK_SEL_MASK;
+	value |= SOR_CLK_CNTRL_DP_CLK_SEL_SINGLE_PCLK;
+	tegra_sor_writel(sor, value, SOR_CLK_CNTRL);
 
 	value = tegra_sor_readl(sor, SOR_DP_SPARE0);
 	value &= ~SOR_DP_SPARE_PANEL_INTERNAL;
@@ -1499,15 +1607,12 @@ static int tegra_sor_hdmi_power_up(struct tegra_sor *sor)
 	tegra_sor_writel(sor, value, SOR_SEQ_INST(0));
 	tegra_sor_writel(sor, value, SOR_SEQ_INST(8));
 
-	dev_info(sor->dev, "clock rate: %lu Hz\n", clk_get_rate(sor->clk));
-	dev_info(sor->dev, "divider: %u.%u\n", divider >> 2, divider & 3);
-
+	/* program the reference clock */
 	value = SOR_REFCLK_DIV_INT(divider >> 2) |
 		SOR_REFCLK_DIV_FRAC(divider);
 	tegra_sor_writel(sor, value, SOR_REFCLK);
 
 	/* XXX don't hardcode */
-	value = tegra_sor_readl(sor, SOR_XBAR_CTRL);
 	value = SOR_XBAR_CTRL_LINK1_XSEL(4, 4) |
 		SOR_XBAR_CTRL_LINK1_XSEL(3, 3) |
 		SOR_XBAR_CTRL_LINK1_XSEL(2, 2) |
@@ -1520,15 +1625,7 @@ static int tegra_sor_hdmi_power_up(struct tegra_sor *sor)
 		SOR_XBAR_CTRL_LINK0_XSEL(0, 2);
 	tegra_sor_writel(sor, value, SOR_XBAR_CTRL);
 
-	value = tegra_sor_readl(sor, SOR_XBAR_POL);
-	value = 0x00000000;
-	tegra_sor_writel(sor, value, SOR_XBAR_POL);
-
-	/*
-	value = tegra_sor_readl(sor, SOR_PWR);
-	value = 0x80000001;
-	tegra_sor_writel(sor, value, SOR_PWR);
-	*/
+	tegra_sor_writel(sor, 0x00000000, SOR_XBAR_POL);
 
 	return 0;
 }
@@ -1595,11 +1692,59 @@ static void tegra_sor_hdmi_write_infopack(struct tegra_sor *sor,
 	}
 }
 
+static int
+tegra_sor_hdmi_setup_avi_infoframe(struct tegra_sor *sor,
+				   const struct drm_display_mode *mode)
+{
+	u8 buffer[HDMI_INFOFRAME_SIZE(AVI)];
+	struct hdmi_avi_infoframe frame;
+	u32 value;
+	int err;
+
+	/* disable AVI infoframe */
+	value = tegra_sor_readl(sor, SOR_HDMI_AVI_INFOFRAME_CTRL);
+	value &= ~INFOFRAME_CTRL_SINGLE;
+	value &= ~INFOFRAME_CTRL_OTHER;
+	value &= ~INFOFRAME_CTRL_ENABLE;
+	tegra_sor_writel(sor, value, SOR_HDMI_AVI_INFOFRAME_CTRL);
+
+	err = drm_hdmi_avi_infoframe_from_display_mode(&frame, mode);
+	if (err < 0) {
+		dev_err(sor->dev, "failed to setup AVI infoframe: %d\n", err);
+		return err;
+	}
+
+	err = hdmi_avi_infoframe_pack(&frame, buffer, sizeof(buffer));
+	if (err < 0) {
+		dev_err(sor->dev, "failed to pack AVI infoframe: %d\n", err);
+		return err;
+	}
+
+	tegra_sor_hdmi_write_infopack(sor, buffer, err);
+
+	/* enable AVI infoframe */
+	value = tegra_sor_readl(sor, SOR_HDMI_AVI_INFOFRAME_CTRL);
+	value |= INFOFRAME_CTRL_CHECKSUM_ENABLE;
+	value |= INFOFRAME_CTRL_ENABLE;
+	tegra_sor_writel(sor, value, SOR_HDMI_AVI_INFOFRAME_CTRL);
+
+	return 0;
+}
+
+static void tegra_sor_hdmi_disable_audio_infoframe(struct tegra_sor *sor)
+{
+	u32 value;
+
+	value = tegra_sor_readl(sor, SOR_HDMI_AUDIO_INFOFRAME_CTRL);
+	value &= ~INFOFRAME_CTRL_ENABLE;
+	tegra_sor_writel(sor, value, SOR_HDMI_AUDIO_INFOFRAME_CTRL);
+}
+
 static int tegra_sor_hdmi_configure(struct tegra_sor *sor,
 				    const struct drm_display_mode *mode)
 {
 	struct tegra_dc *dc = to_tegra_dc(sor->output.encoder.crtc);
-	unsigned int h_ref_to_sync, pulse_start, max_ac;
+	unsigned int h_ref_to_sync = 1, pulse_start, max_ac;
 	struct tegra_sor_hdmi_settings *settings;
 	u32 value;
 	int err;
@@ -1612,23 +1757,13 @@ static int tegra_sor_hdmi_configure(struct tegra_sor *sor,
 	tegra_sor_writel(sor, value, SOR_INPUT_CONTROL);
 
 	max_ac = ((mode->htotal - mode->hdisplay) - SOR_REKEY - 18) / 32;
-	/* XXX */
-	max_ac = 2;
 
 	value = SOR_HDMI_CTRL_ENABLE | SOR_HDMI_CTRL_MAX_AC_PACKET(max_ac) |
 		SOR_HDMI_CTRL_AUDIO_LAYOUT | SOR_HDMI_CTRL_REKEY(SOR_REKEY);
 	tegra_sor_writel(sor, value, SOR_HDMI_CTRL);
 
-	err = calc_h_ref_to_sync(mode, &h_ref_to_sync);
-	if (err < 0) {
-		dev_err(sor->dev, "failed to compute horizontal ref-to-sync: %d\n", err);
-		return err;
-	}
-
-	h_ref_to_sync = 1;
-
-	dev_info(sor->dev, "h_ref_to_sync: %u\n", h_ref_to_sync);
-	pulse_start = h_ref_to_sync + (mode->hsync_end - mode->hsync_start) + (mode->htotal - mode->hsync_end) - 10;
+	pulse_start = h_ref_to_sync + (mode->hsync_end - mode->hsync_start) +
+		      (mode->htotal - mode->hsync_end) - 10;
 
 	value = PULSE_LAST_END_A | PULSE_QUAL_VACTIVE |
 		PULSE_POLARITY_HIGH | PULSE_MODE_NORMAL;
@@ -1641,49 +1776,23 @@ static int tegra_sor_hdmi_configure(struct tegra_sor *sor,
 	value |= H_PULSE2_ENABLE;
 	tegra_dc_writel(dc, value, DC_DISP_DISP_SIGNAL_OPTIONS0);
 
-	if (1) {
-		u8 buffer[HDMI_INFOFRAME_SIZE(AVI)];
-		struct hdmi_avi_infoframe frame;
-
-		/* disable AVI infoframe */
-		value = tegra_sor_readl(sor, SOR_HDMI_AVI_INFOFRAME_CTRL);
-		value &= ~INFOFRAME_CTRL_SINGLE;
-		value &= ~INFOFRAME_CTRL_OTHER;
-		value &= ~INFOFRAME_CTRL_ENABLE;
-		tegra_sor_writel(sor, value, SOR_HDMI_AVI_INFOFRAME_CTRL);
-
-		err = drm_hdmi_avi_infoframe_from_display_mode(&frame, mode);
-		if (err < 0) {
-			dev_err(sor->dev, "failed to setup AVI infoframe: %d\n", err);
-			return err;
-		}
-
-		err = hdmi_avi_infoframe_pack(&frame, buffer, sizeof(buffer));
-		if (err < 0) {
-			dev_err(sor->dev, "failed to pack AVI infoframe: %d\n", err);
-			return err;
-		}
-
-		tegra_sor_hdmi_write_infopack(sor, buffer, err);
-
-		/* enable AVI infoframe */
-		value = tegra_sor_readl(sor, SOR_HDMI_AVI_INFOFRAME_CTRL);
-		value |= INFOFRAME_CTRL_CHECKSUM_ENABLE;
-		value |= INFOFRAME_CTRL_ENABLE;
-		tegra_sor_writel(sor, value, SOR_HDMI_AVI_INFOFRAME_CTRL);
-
-		/* disable audio infoframe */
-		value = tegra_sor_readl(sor, SOR_HDMI_AUDIO_INFOFRAME_CTRL);
-		value &= ~INFOFRAME_CTRL_ENABLE;
-		tegra_sor_writel(sor, value, SOR_HDMI_AUDIO_INFOFRAME_CTRL);
+	err = tegra_sor_hdmi_setup_avi_infoframe(sor, mode);
+	if (err < 0) {
+		dev_err(sor->dev, "failed to setup AVI infoframe: %d\n", err);
+		return err;
 	}
 
+	/* XXX HDMI audio support not implemented yet */
+	tegra_sor_hdmi_disable_audio_infoframe(sor);
+
+	/*
 	value = tegra_sor_readl(sor, SOR_CLK_CNTRL);
 	value &= ~SOR_CLK_CNTRL_DP_LINK_SPEED_MASK;
 	value |= SOR_CLK_CNTRL_DP_LINK_SPEED_G2_70;
 	value &= ~SOR_CLK_CNTRL_DP_CLK_SEL_MASK;
 	value |= SOR_CLK_CNTRL_DP_CLK_SEL_SINGLE_PCLK;
 	tegra_sor_writel(sor, value, SOR_CLK_CNTRL);
+	*/
 
 	/* use custom LVDS protocol */
 	value = tegra_sor_readl(sor, SOR_STATE1);
@@ -1754,12 +1863,46 @@ static int tegra_sor_hdmi_configure(struct tegra_sor *sor,
 	value = DITHER_CONTROL_DISABLE;
 	tegra_dc_writel(dc, value, DC_DISP_DISP_COLOR_CONTROL);
 
+	/* enable display to SOR clock and generate HDMI preamble */
+	value = tegra_dc_readl(dc, DC_DISP_DISP_WIN_OPTIONS);
+	value |= SOR1_ENABLE | SOR1_TIMING_CYA;
+	tegra_dc_writel(dc, value, DC_DISP_DISP_WIN_OPTIONS);
+
+	tegra_dc_commit(dc);
+
+	return 0;
+}
+
+static int tegra_sor_hdmi_power_down(struct tegra_sor *sor)
+{
+	struct tegra_dc *dc = to_tegra_dc(sor->output.encoder.crtc);
+	u32 value;
+	int err;
+
+	/* disable display to SOR clock */
+	value = tegra_dc_readl(dc, DC_DISP_DISP_WIN_OPTIONS);
+	value &= ~SOR1_TIMING_CYA;
+	value &= ~SOR1_ENABLE;
+	tegra_dc_writel(dc, value, DC_DISP_DISP_WIN_OPTIONS);
+
+	tegra_dc_commit(dc);
+
+	err = tegra_io_rail_power_off(TEGRA_IO_RAIL_HDMI);
+	if (err < 0) {
+		dev_err(sor->dev, "failed to power off HDMI rail: %d\n", err);
+		return err;
+	}
+
 	return 0;
 }
 
 static const struct tegra_sor_ops tegra_sor_hdmi_ops = {
+	.name = "HDMI",
+	.probe = tegra_sor_hdmi_probe,
+	.remove = tegra_sor_hdmi_remove,
 	.power_up = tegra_sor_hdmi_power_up,
 	.configure = tegra_sor_hdmi_configure,
+	.power_down = tegra_sor_hdmi_power_down,
 };
 
 static void tegra_sor_encoder_mode_set(struct drm_encoder *encoder,
@@ -1817,7 +1960,6 @@ static void tegra_sor_encoder_mode_set(struct drm_encoder *encoder,
 		goto unlock;
 	}
 
-	/* XXX move this? is it needed for HDMI or eDP? only for LVDS? */
 	err = tegra_sor_power_up(sor, 250);
 	if (err < 0) {
 		dev_err(sor->dev, "failed to power up SOR: %d\n", err);
@@ -1915,7 +2057,7 @@ static void tegra_sor_encoder_mode_set(struct drm_encoder *encoder,
 		SOR_CSTM_UPPER;
 	tegra_sor_writel(sor, value, SOR_CSTM);
 
-	/* PWM setup (XXX is this needed for HDMI?) */
+	/* PWM setup (XXX this could be skipped for HDMI/DP, but meh) */
 	err = tegra_sor_setup_pwm(sor, 250);
 	if (err < 0) {
 		dev_err(sor->dev, "failed to setup PWM: %d\n", err);
@@ -1923,18 +2065,6 @@ static void tegra_sor_encoder_mode_set(struct drm_encoder *encoder,
 	}
 
 	tegra_sor_update(sor);
-
-	/* XXX does this belong here? */
-	value = tegra_dc_readl(dc, DC_DISP_DISP_WIN_OPTIONS);
-	value |= sor->soc->enable;
-
-	/* enable generation of HDMI preamble */
-	if (1)
-		value |= SOR1_TIMING_CYA;
-
-	tegra_dc_writel(dc, value, DC_DISP_DISP_WIN_OPTIONS);
-
-	tegra_dc_commit(dc);
 
 	err = tegra_sor_attach(sor);
 	if (err < 0) {
@@ -1960,9 +2090,7 @@ unlock:
 static void tegra_sor_encoder_disable(struct drm_encoder *encoder)
 {
 	struct tegra_output *output = encoder_to_output(encoder);
-	struct tegra_dc *dc = to_tegra_dc(encoder->crtc);
 	struct tegra_sor *sor = to_sor(output);
-	u32 value;
 	int err;
 
 	mutex_lock(&sor->lock);
@@ -1982,18 +2110,6 @@ static void tegra_sor_encoder_disable(struct drm_encoder *encoder)
 	tegra_sor_writel(sor, 0, SOR_STATE1);
 	tegra_sor_update(sor);
 
-	/*
-	 * The following accesses registers of the display controller, so make
-	 * sure it's only executed when the output is attached to one.
-	 */
-	if (dc) {
-		value = tegra_dc_readl(dc, DC_DISP_DISP_WIN_OPTIONS);
-		value &= ~SOR_ENABLE;
-		tegra_dc_writel(dc, value, DC_DISP_DISP_WIN_OPTIONS);
-
-		tegra_dc_commit(dc);
-	}
-
 	err = tegra_sor_power_down(sor);
 	if (err < 0) {
 		dev_err(sor->dev, "failed to power down SOR: %d\n", err);
@@ -2006,12 +2122,6 @@ static void tegra_sor_encoder_disable(struct drm_encoder *encoder)
 			dev_err(sor->dev, "failed to disable DP: %d\n", err);
 			goto unlock;
 		}
-	}
-
-	err = tegra_io_rail_power_off(TEGRA_IO_RAIL_LVDS);
-	if (err < 0) {
-		dev_err(sor->dev, "failed to power off I/O rail: %d\n", err);
-		goto unlock;
 	}
 
 	if (output->panel)
@@ -2202,8 +2312,6 @@ static const struct tegra_sor_soc tegra124_sor = {
 	.supports_lvds = true,
 	.supports_hdmi = false,
 	.supports_dp = false,
-
-	.enable = SOR_ENABLE,
 };
 
 static const struct tegra_sor_soc tegra210_sor = {
@@ -2211,8 +2319,6 @@ static const struct tegra_sor_soc tegra210_sor = {
 	.supports_lvds = false,
 	.supports_hdmi = false,
 	.supports_dp = false,
-
-	.enable = SOR_ENABLE,
 };
 
 static const struct tegra_sor_soc tegra210_sor1 = {
@@ -2220,8 +2326,6 @@ static const struct tegra_sor_soc tegra210_sor1 = {
 	.supports_lvds = false,
 	.supports_hdmi = true,
 	.supports_dp = true,
-
-	.enable = SOR1_ENABLE,
 
 	.num_settings = ARRAY_SIZE(tegra210_sor_hdmi_defaults),
 	.settings = tegra210_sor_hdmi_defaults,
@@ -2242,8 +2346,6 @@ static int tegra_sor_probe(struct platform_device *pdev)
 	struct tegra_sor *sor;
 	struct resource *regs;
 	int err;
-
-	dev_info(&pdev->dev, "> %s(pdev=%p)\n", __func__, pdev);
 
 	match = of_match_device(tegra_sor_of_match, &pdev->dev);
 
@@ -2274,63 +2376,23 @@ static int tegra_sor_probe(struct platform_device *pdev)
 
 	if (!sor->dpaux) {
 		if (sor->soc->supports_hdmi) {
-			dev_info(&pdev->dev, "  HDMI 2.0 support\n");
 			sor->ops = &tegra_sor_hdmi_ops;
-			sor->mode = TEGRA_SOR_HDMI;
 
-			sor->avdd_io_supply = devm_regulator_get(&pdev->dev, "avdd-io");
-			if (IS_ERR(sor->avdd_io_supply)) {
-				dev_err(&pdev->dev, "cannot get AVDD I/O supply: %ld\n", PTR_ERR(sor->avdd_io_supply));
-				return PTR_ERR(sor->avdd_io_supply);
-			}
-
-			err = regulator_enable(sor->avdd_io_supply);
-			if (err < 0) {
-				dev_err(&pdev->dev, "failed to enable AVDD I/O supply: %d\n", err);
-				return err;
-			}
-
-			sor->vdd_pll_supply = devm_regulator_get(&pdev->dev, "vdd-pll");
-			if (IS_ERR(sor->vdd_pll_supply)) {
-				dev_err(&pdev->dev, "cannot get VDD PLL supply: %ld\n", PTR_ERR(sor->vdd_pll_supply));
-				return PTR_ERR(sor->vdd_pll_supply);
-			}
-
-			err = regulator_enable(sor->vdd_pll_supply);
-			if (err < 0) {
-				dev_err(&pdev->dev, "failed to enable VDD PLL supply: %d\n", err);
-				return err;
-			}
-
-			sor->hdmi_supply = devm_regulator_get(&pdev->dev, "hdmi");
-			if (IS_ERR(sor->hdmi_supply)) {
-				dev_err(&pdev->dev, "cannot get HDMI supply: %ld\n", PTR_ERR(sor->hdmi_supply));
-				return PTR_ERR(sor->hdmi_supply);
-			}
-
-			err = regulator_enable(sor->hdmi_supply);
-			if (err < 0) {
-				dev_err(&pdev->dev, "failed to enable HDMI supply: %d\n", err);
-				return err;
-			}
 		} else if (sor->soc->supports_lvds) {
-			dev_info(&pdev->dev, "  LVDS support\n");
-			sor->mode = TEGRA_SOR_LVDS;
+			dev_err(&pdev->dev, "LVDS not supported yet\n");
 			return -ENODEV;
 		} else {
-			dev_info(&pdev->dev, "  unknown (non-DP) support\n");
+			dev_err(&pdev->dev, "unknown (non-DP) support\n");
 			return -ENODEV;
 		}
 	} else {
 		if (sor->soc->supports_edp) {
-			dev_info(&pdev->dev, "  eDP support\n");
 			sor->ops = &tegra_sor_edp_ops;
-			sor->mode = TEGRA_SOR_EDP;
 		} else if (sor->soc->supports_dp) {
-			dev_info(&pdev->dev, "  DisplayPort support\n");
-			sor->mode = TEGRA_SOR_DP;
+			dev_err(&pdev->dev, "DisplayPort not supported yet\n");
+			return -ENODEV;
 		} else {
-			dev_info(&pdev->dev, "  unknown (DP) support\n");
+			dev_err(&pdev->dev, "unknown (DP) support\n");
 			return -ENODEV;
 		}
 	}
@@ -2341,15 +2403,24 @@ static int tegra_sor_probe(struct platform_device *pdev)
 		return err;
 	}
 
+	err = sor->ops->probe(sor);
+	if (err < 0) {
+		dev_err(&pdev->dev, "failed to probe %s: %d\n", sor->ops->name,
+			err);
+		goto output;
+	}
+
 	regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	sor->regs = devm_ioremap_resource(&pdev->dev, regs);
-	if (IS_ERR(sor->regs))
-		return PTR_ERR(sor->regs);
+	if (IS_ERR(sor->regs)) {
+		err = PTR_ERR(sor->regs);
+		goto remove;
+	}
 
 	err = platform_get_irq(pdev, 0);
 	if (err < 0) {
 		dev_err(&pdev->dev, "failed to get IRQ: %d\n", err);
-		return err;
+		goto remove;
 	}
 
 	sor->irq = err;
@@ -2407,13 +2478,18 @@ static int tegra_sor_probe(struct platform_device *pdev)
 	if (err < 0) {
 		dev_err(&pdev->dev, "failed to register host1x client: %d\n",
 			err);
-		return err;
+		goto remove;
 	}
 
 	platform_set_drvdata(pdev, sor);
 
-	dev_info(&pdev->dev, "< %s()\n", __func__);
 	return 0;
+
+remove:
+	sor->ops->remove(sor);
+output:
+	tegra_output_remove(&sor->output);
+	return err;
 }
 
 static int tegra_sor_remove(struct platform_device *pdev)
@@ -2427,6 +2503,10 @@ static int tegra_sor_remove(struct platform_device *pdev)
 			err);
 		return err;
 	}
+
+	err = sor->ops->remove(sor);
+	if (err < 0)
+		dev_err(&pdev->dev, "failed to remove SOR: %d\n", err);
 
 	tegra_output_remove(&sor->output);
 
