@@ -807,6 +807,8 @@ static int ath10k_pci_wake_wait(struct ath10k *ar)
 
 	while (tot_delay < PCIE_WAKE_TIMEOUT) {
 		if (ath10k_pci_is_awake(ar))
+			if (tot_delay > 10000)
+				ath10k_err(ar, "Total time for wakeup %u us\n", tot_delay);
 			return 0;
 
 		udelay(curr_delay);
