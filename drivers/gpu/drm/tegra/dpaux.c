@@ -566,8 +566,10 @@ int tegra_dpaux_train(struct tegra_dpaux *dpaux, struct drm_dp_link *link,
 	int err;
 
 	err = drm_dp_dpcd_writeb(&dpaux->aux, DP_TRAINING_PATTERN_SET, pattern);
-	if (err < 0)
+	if (err < 0) {
+		dev_err(dpaux->dev, "failed to set training pattern: %d\n", err);
 		return err;
+	}
 
 	if (tp == DP_TRAINING_PATTERN_DISABLE)
 		return 0;
@@ -580,25 +582,33 @@ int tegra_dpaux_train(struct tegra_dpaux *dpaux, struct drm_dp_link *link,
 
 	err = drm_dp_dpcd_write(&dpaux->aux, DP_TRAINING_LANE0_SET, values,
 				link->num_lanes);
-	if (err < 0)
+	if (err < 0) {
+		dev_err(dpaux->dev, "failed to set lane configuration: %d\n", err);
 		return err;
+	}
 
 	usleep_range(500, 1000);
 
 	err = drm_dp_dpcd_read_link_status(&dpaux->aux, status);
-	if (err < 0)
+	if (err < 0) {
+		dev_err(dpaux->dev, "failed to read link status: %d\n", err);
 		return err;
+	}
 
 	switch (tp) {
 	case DP_TRAINING_PATTERN_1:
-		if (!drm_dp_clock_recovery_ok(status, link->num_lanes))
+		if (!drm_dp_clock_recovery_ok(status, link->num_lanes)) {
+			dev_err(dpaux->dev, "clock recovery failed\n");
 			return -EAGAIN;
+		}
 
 		break;
 
 	case DP_TRAINING_PATTERN_2:
-		if (!drm_dp_channel_eq_ok(status, link->num_lanes))
+		if (!drm_dp_channel_eq_ok(status, link->num_lanes)) {
+			dev_err(dpaux->dev, "channel equalization failed\n");
 			return -EAGAIN;
+		}
 
 		break;
 
@@ -608,8 +618,10 @@ int tegra_dpaux_train(struct tegra_dpaux *dpaux, struct drm_dp_link *link,
 	}
 
 	err = drm_dp_dpcd_writeb(&dpaux->aux, DP_EDP_CONFIGURATION_SET, 0);
-	if (err < 0)
+	if (err < 0) {
+		dev_err(dpaux->dev, "failed to set eDP configuration: %d\n", err);
 		return err;
+	}
 
 	return 0;
 }
