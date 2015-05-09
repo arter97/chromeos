@@ -852,6 +852,8 @@ struct ath10k {
 	struct ath10k_thermal thermal;
 	struct ath10k_wow wow;
 
+	bool btc_feature;
+
 #ifdef CONFIG_ATH10K_SMART_ANTENNA
 	struct completion ratecode_evt;
 	/* Temporary place to store peer's rate code reported in RATECODE_LIST
