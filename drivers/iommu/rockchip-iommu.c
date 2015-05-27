@@ -13,7 +13,7 @@
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/iommu.h>
-#include <linux/jiffies.h>
+#include <linux/iopoll.h>
 #include <linux/list.h>
 #include <linux/mm.h>
 #include <linux/module.h>
@@ -39,7 +39,8 @@
 #define RK_MMU_AUTO_GATING	0x24
 
 #define DTE_ADDR_DUMMY		0xCAFEBABE
-#define FORCE_RESET_TIMEOUT	100	/* ms */
+#define FORCE_RESET_TIMEOUT	100000	/* us */
+#define POLL_TIMEOUT		1000	/* us */
 
 /* RK_MMU_STATUS fields */
 #define RK_MMU_STATUS_PAGING_ENABLED       BIT(0)
@@ -106,27 +107,6 @@ static inline void rk_table_flush(u32 *va, unsigned int count)
 	__cpuc_flush_dcache_area(va, size);
 	outer_flush_range(pa_start, pa_end);
 }
-
-/**
- * Inspired by _wait_for in intel_drv.h
- * This is NOT safe for use in interrupt context.
- *
- * Note that it's important that we check the condition again after having
- * timed out, since the timeout could be due to preemption or similar and
- * we've never had a chance to check the condition before the timeout.
- */
-#define rk_wait_for(COND, MS) ({ \
-	unsigned long timeout__ = jiffies + msecs_to_jiffies(MS) + 1;	\
-	int ret__ = 0;							\
-	while (!(COND)) {						\
-		if (time_after(jiffies, timeout__)) {			\
-			ret__ = (COND) ? 0 : -ETIMEDOUT;		\
-			break;						\
-		}							\
-		usleep_range(50, 100);					\
-	}								\
-	ret__;								\
-})
 
 /*
  * The Rockchip rk3288 iommu uses a 2-level page table.
@@ -319,6 +299,7 @@ static bool rk_iommu_is_paging_enabled(struct rk_iommu *iommu)
 static int rk_iommu_enable_stall(struct rk_iommu *iommu)
 {
 	int ret;
+	u32 val;
 
 	assert_spin_locked(&iommu->hw_lock);
 
@@ -331,7 +312,9 @@ static int rk_iommu_enable_stall(struct rk_iommu *iommu)
 
 	rk_iommu_command(iommu, RK_MMU_CMD_ENABLE_STALL);
 
-	ret = rk_wait_for(rk_iommu_is_stall_active(iommu), 1);
+	ret = readl_poll_timeout_atomic(iommu->base + RK_MMU_STATUS, val,
+					val & RK_MMU_STATUS_STALL_ACTIVE,
+					0, POLL_TIMEOUT);
 	if (ret)
 		dev_err(iommu->dev, "Enable stall request timed out, status: %#08x\n",
 			rk_iommu_read(iommu, RK_MMU_STATUS));
@@ -342,6 +325,7 @@ static int rk_iommu_enable_stall(struct rk_iommu *iommu)
 static int rk_iommu_disable_stall(struct rk_iommu *iommu)
 {
 	int ret;
+	u32 val;
 
 	assert_spin_locked(&iommu->hw_lock);
 
@@ -350,7 +334,9 @@ static int rk_iommu_disable_stall(struct rk_iommu *iommu)
 
 	rk_iommu_command(iommu, RK_MMU_CMD_DISABLE_STALL);
 
-	ret = rk_wait_for(!rk_iommu_is_stall_active(iommu), 1);
+	ret = readl_poll_timeout_atomic(iommu->base + RK_MMU_STATUS, val,
+					!(val & RK_MMU_STATUS_STALL_ACTIVE),
+					0, POLL_TIMEOUT);
 	if (ret)
 		dev_err(iommu->dev, "Disable stall request timed out, status: %#08x\n",
 			rk_iommu_read(iommu, RK_MMU_STATUS));
@@ -361,6 +347,7 @@ static int rk_iommu_disable_stall(struct rk_iommu *iommu)
 static int rk_iommu_enable_paging(struct rk_iommu *iommu)
 {
 	int ret;
+	u32 val;
 
 	assert_spin_locked(&iommu->hw_lock);
 
@@ -369,7 +356,9 @@ static int rk_iommu_enable_paging(struct rk_iommu *iommu)
 
 	rk_iommu_command(iommu, RK_MMU_CMD_ENABLE_PAGING);
 
-	ret = rk_wait_for(rk_iommu_is_paging_enabled(iommu), 1);
+	ret = readl_poll_timeout_atomic(iommu->base + RK_MMU_STATUS, val,
+					val & RK_MMU_STATUS_PAGING_ENABLED,
+					0, POLL_TIMEOUT);
 	if (ret)
 		dev_err(iommu->dev, "Enable paging request timed out, status: %#08x\n",
 			rk_iommu_read(iommu, RK_MMU_STATUS));
@@ -380,6 +369,7 @@ static int rk_iommu_enable_paging(struct rk_iommu *iommu)
 static int rk_iommu_disable_paging(struct rk_iommu *iommu)
 {
 	int ret;
+	u32 val;
 
 	assert_spin_locked(&iommu->hw_lock);
 
@@ -388,7 +378,9 @@ static int rk_iommu_disable_paging(struct rk_iommu *iommu)
 
 	rk_iommu_command(iommu, RK_MMU_CMD_DISABLE_PAGING);
 
-	ret = rk_wait_for(!rk_iommu_is_paging_enabled(iommu), 1);
+	ret = readl_poll_timeout_atomic(iommu->base + RK_MMU_STATUS, val,
+					!(val & RK_MMU_STATUS_PAGING_ENABLED),
+					0, POLL_TIMEOUT);
 	if (ret)
 		dev_err(iommu->dev, "Disable paging request timed out, status: #%08x\n",
 			rk_iommu_read(iommu, RK_MMU_STATUS));
@@ -417,8 +409,9 @@ static int rk_iommu_force_reset(struct rk_iommu *iommu)
 
 	rk_iommu_command(iommu, RK_MMU_CMD_FORCE_RESET);
 
-	ret = rk_wait_for(rk_iommu_read(iommu, RK_MMU_DTE_ADDR) == 0x00000000,
-			  FORCE_RESET_TIMEOUT);
+	ret = readl_poll_timeout_atomic(iommu->base + RK_MMU_DTE_ADDR,
+					dte_addr, dte_addr == 0x00000000,
+					0, FORCE_RESET_TIMEOUT);
 	if (ret)
 		dev_err(iommu->dev, "FORCE_RESET command timed out\n");
 
