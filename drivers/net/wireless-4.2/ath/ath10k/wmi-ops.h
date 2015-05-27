@@ -182,6 +182,9 @@ struct wmi_ops {
 	void (*fw_stats_fill)(struct ath10k *ar,
 			      struct ath10k_fw_stats *fw_stats,
 			      char *buf);
+	struct sk_buff *(*gen_pdev_sa_disabled_ant_sel)(struct ath10k *ar,
+							u32 mode, u32 tx_ant,
+							u32 rx_ant);
 #ifdef CONFIG_ATH10K_SMART_ANTENNA
 	struct sk_buff *(*gen_pdev_enable_smart_ant)(struct ath10k *ar,
 						     u32 mode, u32 tx_ant,
@@ -1320,6 +1323,24 @@ ath10k_wmi_fw_stats_fill(struct ath10k *ar, struct ath10k_fw_stats *fw_stats,
 
 	ar->wmi.ops->fw_stats_fill(ar, fw_stats, buf);
 	return 0;
+}
+
+static inline int
+ath10k_wmi_pdev_sa_disabled_ant_sel(struct ath10k *ar, u32 mode,
+				    u32 tx_ant, u32 rx_ant)
+{
+	struct sk_buff *skb;
+
+	if (!ar->wmi.ops->gen_pdev_sa_disabled_ant_sel)
+		return -EOPNOTSUPP;
+
+	skb = ar->wmi.ops->gen_pdev_sa_disabled_ant_sel(ar,
+							mode, tx_ant, rx_ant);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
+
+	return ath10k_wmi_cmd_send(ar, skb,
+				   ar->wmi.cmd->pdev_set_smart_ant_cmdid);
 }
 
 #ifdef CONFIG_ATH10K_SMART_ANTENNA

@@ -772,8 +772,8 @@ struct wmi_cmd_map {
 	u32 mu_cal_start_cmdid;
 	u32 set_cca_params_cmdid;
 	u32 pdev_bss_chan_info_request_cmdid;
-#ifdef CONFIG_ATH10K_SMART_ANTENNA
 	u32 pdev_set_smart_ant_cmdid;
+#ifdef CONFIG_ATH10K_SMART_ANTENNA
 	u32 pdev_set_rx_ant_cmdid;
 	u32 peer_set_smart_tx_ant_cmdid;
 	u32 peer_smart_ant_fb_config_cmdid;
@@ -6101,24 +6101,14 @@ enum wmi_txbf_conf {
 	WMI_TXBF_CONF_AFTER_ASSOC,
 };
 
-#ifdef CONFIG_ATH10K_SMART_ANTENNA
-/*Smart antenna related defs */
-
+#define WMI_SMART_ANT_DISABLED_ANT_SEL	2
+#define WMI_SMART_ANT_DISABLED_MODE_PARALLEL	1
 #define WMI_SMART_ANT_GPIO_MAX		4
-#define WMI_SMART_ANT_MODE_SERIAL	0
-#define WMI_SMART_ANT_MODE_PARALLEL	1
-#define WMI_SMART_ANT_DISABLE		0
-#define WMI_SMART_ANT_ENABLE		1
-#define WMI_SMART_ANT_RATE_SERIES_MAX	2
-#define WMI_SMART_ANT_NODE_CONFIG_ARGS_LEN  4
-#define WMI_SMART_ANT_TX_FEEDBACK_CONFIG_CMD	0x1
-
-#define WMI_CCK_OFDM_RATES_MAX		12
-#define WMI_MCS_RATES_MAX		32
-#define WMI_RATE_COUNT_MAX		4
+#define ATH10K_DEFAULT_ANTENNA_2G 2
+#define ATH10K_DEFAULT_ANTENNA_5G 6
 
 struct wmi_pdev_set_smart_ant_cmd {
-	/* 1 - enable, 0 - disable */
+	/* 0-disable 1- enable, 2 - set default antenna in disabled mode */
 	__le32 enable;
 
 	/* 1 - GPIO parallel mode, 0 - GPIO serial mode */
@@ -6136,6 +6126,21 @@ struct wmi_pdev_set_smart_ant_cmd {
 	/* GPIO functions */
 	__le32 gpio_func[WMI_SMART_ANT_GPIO_MAX];
 } __packed;
+
+#ifdef CONFIG_ATH10K_SMART_ANTENNA
+/*Smart antenna related defs */
+
+#define WMI_SMART_ANT_MODE_SERIAL	0
+#define WMI_SMART_ANT_MODE_PARALLEL	1
+#define WMI_SMART_ANT_DISABLE		0
+#define WMI_SMART_ANT_ENABLE		1
+#define WMI_SMART_ANT_RATE_SERIES_MAX	2
+#define WMI_SMART_ANT_NODE_CONFIG_ARGS_LEN  4
+#define WMI_SMART_ANT_TX_FEEDBACK_CONFIG_CMD	0x1
+
+#define WMI_CCK_OFDM_RATES_MAX		12
+#define WMI_MCS_RATES_MAX		32
+#define WMI_RATE_COUNT_MAX		4
 
 struct wmi_pdev_set_rx_antenna_cmd {
 	__le32 rx_antenna;
