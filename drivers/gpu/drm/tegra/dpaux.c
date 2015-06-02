@@ -59,12 +59,15 @@ static inline struct tegra_dpaux *work_to_dpaux(struct work_struct *work)
 static inline u32 tegra_dpaux_readl(struct tegra_dpaux *dpaux,
 				    unsigned long offset)
 {
-	return readl(dpaux->regs + (offset << 2));
+	u32 value = readl(dpaux->regs + (offset << 2));
+	//dev_info(dpaux->dev, "%08lx > %08x\n", offset, value);
+	return value;
 }
 
 static inline void tegra_dpaux_writel(struct tegra_dpaux *dpaux,
 				      u32 value, unsigned long offset)
 {
+	//dev_info(dpaux->dev, "%08lx < %08x\n", offset, value);
 	writel(value, dpaux->regs + (offset << 2));
 }
 
@@ -307,7 +310,9 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 		return PTR_ERR(dpaux->clk);
 	}
 
+	pr_info("enabling DPAUX clock...\n");
 	err = clk_prepare_enable(dpaux->clk);
+	pr_info("done: %d\n", err);
 	if (err < 0) {
 		dev_err(&pdev->dev, "failed to enable module clock: %d\n",
 			err);

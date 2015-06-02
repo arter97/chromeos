@@ -15,7 +15,9 @@
 
 #define SOR_SUPER_STATE1 0x02
 #define  SOR_SUPER_STATE_ATTACHED		(1 << 3)
+#define  SOR_SUPER_STATE_MODE_MASK		(1 << 2)
 #define  SOR_SUPER_STATE_MODE_NORMAL		(1 << 2)
+#define  SOR_SUPER_STATE_MODE_SAFE		(0 << 2)
 #define  SOR_SUPER_STATE_HEAD_MODE_MASK		(3 << 0)
 #define  SOR_SUPER_STATE_HEAD_MODE_AWAKE	(2 << 0)
 #define  SOR_SUPER_STATE_HEAD_MODE_SNOOZE	(1 << 0)
@@ -148,6 +150,7 @@
 #define  SOR_LANE_SEQ_CTL_SEQUENCE_DOWN		(1 << 20)
 #define  SOR_LANE_SEQ_CTL_POWER_STATE_UP	(0 << 16)
 #define  SOR_LANE_SEQ_CTL_POWER_STATE_DOWN	(1 << 16)
+#define  SOR_LANE_SEQ_CTL_DELAY_MASK		(0xf << 12)
 #define  SOR_LANE_SEQ_CTL_DELAY(x)		(((x) & 0xf) << 12)
 
 #define SOR_SEQ_INST(x) (0x22 + (x))

@@ -1195,7 +1195,7 @@ static int tegra_dc_set_timings(struct tegra_dc *dc,
 	unsigned int v_ref_to_sync = 1;
 	unsigned long value;
 
-	tegra_dc_writel(dc, 0x0, DC_DISP_DISP_TIMING_OPTIONS);
+	tegra_dc_writel(dc, 0x1, DC_DISP_DISP_TIMING_OPTIONS);
 
 	value = (v_ref_to_sync << 16) | h_ref_to_sync;
 	tegra_dc_writel(dc, value, DC_DISP_REF_TO_SYNC);
@@ -1204,11 +1204,11 @@ static int tegra_dc_set_timings(struct tegra_dc *dc,
 		((mode->hsync_end - mode->hsync_start) <<  0);
 	tegra_dc_writel(dc, value, DC_DISP_SYNC_WIDTH);
 
-	value = ((mode->vtotal - mode->vsync_end) << 16) |
+	value = ((mode->vtotal - mode->vsync_end - 1) << 16) |
 		((mode->htotal - mode->hsync_end) <<  0);
 	tegra_dc_writel(dc, value, DC_DISP_BACK_PORCH);
 
-	value = ((mode->vsync_start - mode->vdisplay) << 16) |
+	value = ((mode->vsync_start - mode->vdisplay + 1) << 16) |
 		((mode->hsync_start - mode->hdisplay) <<  0);
 	tegra_dc_writel(dc, value, DC_DISP_FRONT_PORCH);
 
@@ -1298,6 +1298,8 @@ static void tegra_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	struct tegra_dc *dc = to_tegra_dc(crtc);
 	u32 value;
 
+	dev_dbg(dc->dev, "> %s(crtc=%p)\n", __func__, crtc);
+
 	tegra_dc_commit_state(dc, state);
 
 	/* program display mode */
@@ -1321,6 +1323,8 @@ static void tegra_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	tegra_dc_writel(dc, value, DC_CMD_DISPLAY_POWER_CONTROL);
 
 	tegra_dc_commit(dc);
+
+	dev_dbg(dc->dev, "< %s()\n", __func__);
 }
 
 static void tegra_crtc_prepare(struct drm_crtc *crtc)
@@ -1330,7 +1334,11 @@ static void tegra_crtc_prepare(struct drm_crtc *crtc)
 
 static void tegra_crtc_commit(struct drm_crtc *crtc)
 {
+	struct tegra_dc *dc = to_tegra_dc(crtc);
+
+	dev_dbg(dc->dev, "> %s(crtc=%p)\n", __func__, crtc);
 	drm_crtc_vblank_on(crtc);
+	dev_dbg(dc->dev, "< %s()\n", __func__);
 }
 
 static int tegra_crtc_atomic_check(struct drm_crtc *crtc,
