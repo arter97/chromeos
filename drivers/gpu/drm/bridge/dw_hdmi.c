@@ -1689,7 +1689,7 @@ static int dw_hdmi_connector_get_modes(struct drm_connector *connector)
 					     connector);
 	struct hdmi_vmode *vmode = &hdmi->hdmi_data.video_mode;
 	struct edid *edid;
-	int ret;
+	int ret = 0;
 
 	if (!hdmi->ddc)
 		return 0;
@@ -1709,7 +1709,7 @@ static int dw_hdmi_connector_get_modes(struct drm_connector *connector)
 		dev_dbg(hdmi->dev, "failed to get edid\n");
 	}
 
-	return 0;
+	return ret;
 }
 
 static enum drm_mode_status
