@@ -467,6 +467,8 @@ int tegra_dpaux_attach(struct tegra_dpaux *dpaux, struct tegra_output *output)
 	if (err < 0)
 		return err;
 
+	return 0;
+
 	timeout = jiffies + msecs_to_jiffies(250);
 
 	while (time_before(jiffies, timeout)) {
@@ -490,6 +492,8 @@ int tegra_dpaux_detach(struct tegra_dpaux *dpaux)
 	err = regulator_disable(dpaux->vdd);
 	if (err < 0)
 		return err;
+
+	return 0;
 
 	timeout = jiffies + msecs_to_jiffies(250);
 

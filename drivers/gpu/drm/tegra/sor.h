@@ -41,7 +41,9 @@
 #define  SOR_STATE_ASY_CRC_MODE_NON_ACTIVE	(0x2 << 6)
 #define  SOR_STATE_ASY_CRC_MODE_COMPLETE	(0x1 << 6)
 #define  SOR_STATE_ASY_CRC_MODE_ACTIVE		(0x0 << 6)
-#define  SOR_STATE_ASY_OWNER_MASK		0xf
+#define  SOR_STATE_ASY_SUBOWNER_MASK		(0x3 << 4)
+#define  SOR_STATE_ASY_SUBOWNER(x)		(((x) & 0x3) << 4)
+#define  SOR_STATE_ASY_OWNER_MASK		(0xf << 0)
 #define  SOR_STATE_ASY_OWNER(x)			(((x) & 0xf) << 0)
 
 #define SOR_HEAD_STATE0(x) (0x05 + (x))
@@ -83,6 +85,8 @@
 #define  SOR_TEST_ATTACHED			(1 << 10)
 #define  SOR_TEST_HEAD_MODE_MASK		(3 << 8)
 #define  SOR_TEST_HEAD_MODE_AWAKE		(2 << 8)
+#define  SOR_TEST_HEAD_MODE_SNOOZE		(1 << 8)
+#define  SOR_TEST_HEAD_MODE_SLEEP		(0 << 8)
 
 #define SOR_PLL0 0x17
 #define  SOR_PLL0_ICHPMP_MASK			(0xf << 24)
@@ -118,6 +122,9 @@
 #define  SOR_PLL2_POWERDOWN_OVERRIDE		(1 << 18)
 #define  SOR_PLL2_SEQ_PLLCAPPD			(1 << 17)
 #define  SOR_PLL2_SEQ_PLL_PULLDOWN		(1 << 16)
+#define  SOR_PLL2_PLL_NDIV_MASK			(0xff << 8)
+#define  SOR_PLL2_PLL_PDIV_MASK			(0xf << 4)
+#define  SOR_PLL2_PLL_PDIV_MODE_MASK		(0x3 << 2)
 
 #define SOR_PLL3 0x1a
 #define  SOR_PLL3_BG_VREF_LEVEL_MASK		(0xf << 24)
@@ -132,10 +139,10 @@
 #define  SOR_CSTM_UPPER				(1 << 11)
 
 #define SOR_LVDS 0x1c
-#define SOR_CRC_A 0x1d
-#define  SOR_CRC_A_VALID			(1 << 0)
-#define  SOR_CRC_A_RESET			(1 << 0)
-#define SOR_CRC_B 0x1e
+#define SOR_CRCA 0x1d
+#define  SOR_CRCA_VALID			(1 << 0)
+#define  SOR_CRCA_RESET			(1 << 0)
+#define SOR_CRCB 0x1e
 #define SOR_BLANK 0x1f
 #define SOR_SEQ_CTL 0x20
 #define  SOR_SEQ_CTL_PD_PC_ALT(x)	(((x) & 0xf) << 12)
@@ -244,12 +251,12 @@
 #define  SOR_LANE_PREEMPHASIS_LANE1(x) (((x) & 0xff) << 8)
 #define  SOR_LANE_PREEMPHASIS_LANE0(x) (((x) & 0xff) << 0)
 
-#define SOR_LANE_POST_CURSOR0 0x56
-#define SOR_LANE_POST_CURSOR1 0x57
-#define  SOR_LANE_POST_CURSOR_LANE3(x) (((x) & 0xff) << 24)
-#define  SOR_LANE_POST_CURSOR_LANE2(x) (((x) & 0xff) << 16)
-#define  SOR_LANE_POST_CURSOR_LANE1(x) (((x) & 0xff) << 8)
-#define  SOR_LANE_POST_CURSOR_LANE0(x) (((x) & 0xff) << 0)
+#define SOR_LANE_POSTCURSOR0 0x56
+#define SOR_LANE_POSTCURSOR1 0x57
+#define  SOR_LANE_POSTCURSOR_LANE3(x) (((x) & 0xff) << 24)
+#define  SOR_LANE_POSTCURSOR_LANE2(x) (((x) & 0xff) << 16)
+#define  SOR_LANE_POSTCURSOR_LANE1(x) (((x) & 0xff) << 8)
+#define  SOR_LANE_POSTCURSOR_LANE0(x) (((x) & 0xff) << 0)
 
 #define SOR_DP_CONFIG0 0x58
 #define SOR_DP_CONFIG_DISPARITY_NEGATIVE	(1 << 31)

@@ -1237,6 +1237,8 @@ int tegra_dc_state_setup_clock(struct tegra_dc *dc,
 {
 	struct tegra_dc_state *state = to_dc_state(crtc_state);
 
+	dev_dbg(dc->dev, "> %s(dc=%p, pclk=%lu, div=%u)\n", __func__, dc, pclk, div);
+
 	if (!clk_has_parent(dc->clk, clk))
 		return -EINVAL;
 
@@ -1244,6 +1246,7 @@ int tegra_dc_state_setup_clock(struct tegra_dc *dc,
 	state->pclk = pclk;
 	state->div = div;
 
+	dev_dbg(dc->dev, "< %s()\n", __func__);
 	return 0;
 }
 
@@ -1274,6 +1277,7 @@ static void tegra_dc_commit_state(struct tegra_dc *dc,
 				state->pclk);
 	}
 
+	DRM_DEBUG_KMS("rate: %lu\n", clk_get_rate(state->clk));
 	DRM_DEBUG_KMS("rate: %lu, div: %u\n", clk_get_rate(dc->clk),
 		      state->div);
 	DRM_DEBUG_KMS("pclk: %lu\n", state->pclk);
