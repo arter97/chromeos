@@ -1041,6 +1041,14 @@
 		#size-cells = <0>;
 		scl-gpio = <&gpio TEGRA_GPIO(S, 2) 0>;
 		sda-gpio = <&gpio TEGRA_GPIO(S, 3) 0>;
+		resets = <&tegra_car 208>;
+		reset-names = "vii2c";
+		clocks = <&tegra_car TEGRA210_CLK_VI_I2C>,
+		         <&tegra_car TEGRA210_CLK_HOST1X>,
+			 <&tegra_car TEGRA210_CLK_I2CSLOW>;
+		clock-names = "vii2c",
+			      "host1x",
+			      "i2cslow";
 		status = "disabled";
 		clock-frequency = <400000>;
 	};

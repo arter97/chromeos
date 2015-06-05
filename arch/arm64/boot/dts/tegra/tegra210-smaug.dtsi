@@ -954,6 +954,7 @@
 // CAM_I2C
 &vii2c {
 	status = "okay";
+	avdd-dsi-csi-supply = <&pp1200_avdd>;
 };
 
 &efuse {
