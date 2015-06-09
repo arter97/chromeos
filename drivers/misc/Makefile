@@ -59,3 +59,4 @@ obj-$(CONFIG_VEXPRESS_SYSCFG)	+= vexpress-syscfg.o
 obj-$(CONFIG_CXL_BASE)		+= cxl/
 obj-$(CONFIG_UID_CPUTIME) += uid_cputime.o
 obj-$(CONFIG_BLUEDROID_PM)      += bluedroid_pm.o
+obj-$(CONFIG_VIDEO_IMX219)     += tegra/
