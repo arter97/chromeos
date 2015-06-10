@@ -88,6 +88,7 @@
 # define DP_DETAILED_CAP_INFO_AVAILABLE	    (1 << 4) /* DPI */
 
 #define DP_MAIN_LINK_CHANNEL_CODING         0x006
+# define DP_CODING_ANSI_8B10B		    (1 << 0)
 
 #define DP_DOWN_STREAM_PORT_COUNT	    0x007
 # define DP_PORT_COUNT_MASK		    0x0f
@@ -816,6 +817,7 @@ struct drm_dp_link_ops {
  */
 #define DP_LINK_CAP_ENHANCED_FRAMING (1 << 0)
 #define DP_LINK_CAP_FAST_TRAINING (1 << 1)
+#define DP_LINK_CAP_ANSI_8B10B (1 << 2)
 
 struct drm_dp_link {
 	unsigned char revision;

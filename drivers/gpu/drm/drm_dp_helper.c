@@ -655,7 +655,7 @@ static void drm_dp_link_reset(struct drm_dp_link *link)
  */
 int drm_dp_link_probe(struct drm_dp_aux *aux, struct drm_dp_link *link)
 {
-	u8 values[4];
+	u8 values[7];
 	int err;
 
 	drm_dp_link_reset(link);
@@ -674,6 +674,9 @@ int drm_dp_link_probe(struct drm_dp_aux *aux, struct drm_dp_link *link)
 
 	if (values[3] & DP_NO_AUX_HANDSHAKE_LINK_TRAINING)
 		link->capabilities |= DP_LINK_CAP_FAST_TRAINING;
+
+	if (values[6] & DP_SET_ANSI_8B10B)
+		link->capabilities |= DP_LINK_CAP_ANSI_8B10B;
 
 	/* DP_TRAINING_AUX_RD_INTERVAL is in units of 4 milliseconds */
 	link->aux_rd_interval = values[14] * 4000;
@@ -760,7 +763,7 @@ EXPORT_SYMBOL(drm_dp_link_power_down);
  */
 int drm_dp_link_configure(struct drm_dp_aux *aux, struct drm_dp_link *link)
 {
-	u8 values[2];
+	u8 values[2], value = 0;
 	int err;
 
 	if (link->ops && link->ops->configure) {
@@ -778,6 +781,15 @@ int drm_dp_link_configure(struct drm_dp_aux *aux, struct drm_dp_link *link)
 		values[1] |= DP_LANE_COUNT_ENHANCED_FRAME_EN;
 
 	err = drm_dp_dpcd_write(aux, DP_LINK_BW_SET, values, sizeof(values));
+	if (err < 0)
+		return err;
+
+	if (link->capabilities & DP_LINK_CAP_ANSI_8B10B)
+		value = DP_SET_ANSI_8B10B;
+	else
+		value = 0;
+
+	err = drm_dp_dpcd_writeb(aux, DP_MAIN_LINK_CHANNEL_CODING_SET, value);
 	if (err < 0)
 		return err;
 
