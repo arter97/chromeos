@@ -133,6 +133,8 @@
 #define  SOR_PLL3_PLL_VDD_MODE_3V3		(1 << 13)
 
 #define SOR_CSTM 0x1b
+#define  SOR_CSTM_ROTCLK_MASK			(0xf << 24)
+#define  SOR_CSTM_ROTCLK(x)			(((x) & 0xf) << 24)
 #define  SOR_CSTM_LVDS				(1 << 16)
 #define  SOR_CSTM_LINK_ACT_B			(1 << 15)
 #define  SOR_CSTM_LINK_ACT_A			(1 << 14)
@@ -217,7 +219,9 @@
 #define SOR_TRIG 0x48
 #define SOR_MSCHECK 0x49
 #define SOR_XBAR_CTRL 0x4a
+#define  SOR_XBAR_CTRL_LINK1_XSEL_MASK(channel) ((0x7 << ((channel) * 3)) << 17)
 #define  SOR_XBAR_CTRL_LINK1_XSEL(channel, value) ((((value) & 0x7) << ((channel) * 3)) << 17)
+#define  SOR_XBAR_CTRL_LINK0_XSEL_MASK(channel) ((0x7 << ((channel) * 3)) <<  2)
 #define  SOR_XBAR_CTRL_LINK0_XSEL(channel, value) ((((value) & 0x7) << ((channel) * 3)) <<  2)
 #define  SOR_XBAR_CTRL_LINK_SWAP (1 << 1)
 #define  SOR_XBAR_CTRL_BYPASS (1 << 0)

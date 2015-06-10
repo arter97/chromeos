@@ -430,8 +430,20 @@ static int drm_dp_dpcd_access(struct drm_dp_aux *aux, u8 request,
 ssize_t drm_dp_dpcd_read(struct drm_dp_aux *aux, unsigned int offset,
 			 void *buffer, size_t size)
 {
-	return drm_dp_dpcd_access(aux, DP_AUX_NATIVE_READ, offset, buffer,
-				  size);
+	ssize_t err, i;
+	err = drm_dp_dpcd_access(aux, DP_AUX_NATIVE_READ, offset, buffer,
+				 size);
+	if (err < 0)
+		goto out;
+
+	for (i = 0; i < err; i++) {
+		u8 *ptr = buffer;
+
+		dev_dbg(aux->dev, "%04zx > %02x\n", offset + i, ptr[i]);
+	}
+
+out:
+	return err;
 }
 EXPORT_SYMBOL(drm_dp_dpcd_read);
 
@@ -452,8 +464,21 @@ EXPORT_SYMBOL(drm_dp_dpcd_read);
 ssize_t drm_dp_dpcd_write(struct drm_dp_aux *aux, unsigned int offset,
 			  void *buffer, size_t size)
 {
-	return drm_dp_dpcd_access(aux, DP_AUX_NATIVE_WRITE, offset, buffer,
-				  size);
+	ssize_t err, i;
+
+	err = drm_dp_dpcd_access(aux, DP_AUX_NATIVE_WRITE, offset, buffer,
+				 size);
+	if (err < 0)
+		goto out;
+
+	for (i = 0; i < err; i++) {
+		u8 *ptr = buffer;
+
+		dev_dbg(aux->dev, "%04zx < %02x\n", offset + i, ptr[i]);
+	}
+
+out:
+	return err;
 }
 EXPORT_SYMBOL(drm_dp_dpcd_write);
 
