@@ -574,7 +574,6 @@ extern bool intel_encoder_check_is_cloned(struct intel_encoder *encoder);
 extern void intel_connector_dpms(struct drm_connector *, int mode);
 extern bool intel_connector_get_hw_state(struct intel_connector *connector);
 extern void intel_modeset_check_state(struct drm_device *dev);
-extern void intel_restore_cursor_state(struct drm_device *dev);
 
 
 static inline struct intel_encoder *intel_attached_encoder(struct drm_connector *connector)
