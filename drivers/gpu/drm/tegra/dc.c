@@ -1333,7 +1333,16 @@ static void tegra_crtc_mode_set_nofb(struct drm_crtc *crtc)
 
 static void tegra_crtc_prepare(struct drm_crtc *crtc)
 {
+	struct tegra_dc *dc = to_tegra_dc(crtc);
+
+	dev_dbg(dc->dev, "> %s(crtc=%p)\n", __func__, crtc);
+
+	reset_control_assert(dc->rst);
+	usleep_range(2000, 5000);
+	reset_control_deassert(dc->rst);
+
 	tegra_crtc_disable(crtc);
+	dev_dbg(dc->dev, "< %s()\n", __func__);
 }
 
 static void tegra_crtc_commit(struct drm_crtc *crtc)
