@@ -20,6 +20,8 @@
  * OF THIS SOFTWARE.
  */
 
+#define DEBUG
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/delay.h>
@@ -532,6 +534,12 @@ int drm_dp_link_probe(struct drm_dp_aux *aux, struct drm_dp_link *link)
 
 	if (values[6] & DP_SET_ANSI_8B10B)
 		link->capabilities |= DP_LINK_CAP_ANSI_8B10B;
+
+	err = drm_dp_dpcd_read(aux, DP_TRAINING_AUX_RD_INTERVAL, values, 1);
+	if (err < 0)
+		return err;
+
+	dev_info(aux->dev, "DP_TRAINING_AUX_RD_INTERVAL: %02x\n", values[0]);
 
 	return 0;
 }

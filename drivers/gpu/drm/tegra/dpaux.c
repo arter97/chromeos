@@ -553,18 +553,6 @@ int tegra_dpaux_disable(struct tegra_dpaux *dpaux)
 	return 0;
 }
 
-int tegra_dpaux_prepare(struct tegra_dpaux *dpaux, u8 encoding)
-{
-	int err;
-
-	err = drm_dp_dpcd_writeb(&dpaux->aux, DP_MAIN_LINK_CHANNEL_CODING_SET,
-				 encoding);
-	if (err < 0)
-		return err;
-
-	return 0;
-}
-
 int tegra_dpaux_train(struct tegra_dpaux *dpaux, struct drm_dp_link *link,
 		      u8 pattern)
 {

@@ -862,7 +862,7 @@ void tegra_pmc_init_tsense_reset(struct tegra_pmc *pmc)
 	u32 value, checksum;
 
 	if (!pmc->soc->has_tsense_reset)
-		goto out;
+		return;
 
 	np = of_find_node_by_name(pmc->dev->of_node, "i2c-thermtrip");
 	if (!np) {
