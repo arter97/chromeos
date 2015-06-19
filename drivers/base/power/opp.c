@@ -746,5 +746,5 @@ int of_init_opp_table_named(struct device *dev, const char *name)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(of_init_opp_table);
+EXPORT_SYMBOL_GPL(of_init_opp_table_named);
 #endif
