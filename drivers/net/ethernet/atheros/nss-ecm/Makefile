@@ -38,6 +38,12 @@ ECM_STATE_OUTPUT_ENABLE=y
 ecm-$(ECM_STATE_OUTPUT_ENABLE) += ecm_state.o
 ccflags-$(ECM_STATE_OUTPUT_ENABLE) += -DECM_STATE_OUTPUT_ENABLE
 
+# #############################################################################
+# Define ECM_DB_ADVANCED_STATS_ENABLE to support XML state output
+# #############################################################################
+ECM_DB_ADVANCED_STATS_ENABLE=y
+ccflags-$(ECM_DB_ADVANCED_STATS_ENABLE) += -DECM_DB_ADVANCED_STATS_ENABLE
+
 ccflags-y += -DECM_CLASSIFIER_DEFAULT_DEBUG_LEVEL=1
 ccflags-y += -DECM_DB_DEBUG_LEVEL=1
 ccflags-y += -DECM_FRONT_END_IPV4_DEBUG_LEVEL=1
