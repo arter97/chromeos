@@ -90,6 +90,7 @@
 	might_sleep_if(timeout_us); \
 	for (;;) { \
 		(val) = readl(addr); \
+		dev_info(&pdev->dev, "read 0x%x from link status\n", (val)); \
 		if (cond) \
 			break; \
 		if (timeout_us && time_after(jiffies, timeout)) { \
@@ -662,6 +663,7 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 	val = qcom_elbi_readl_relaxed(qcom_pcie, PCIE20_ELBI_SYS_CTRL);
 	val |= PCIE20_ELBI_SYS_CTRL_LTSSM_EN;
 	qcom_elbi_writel_relaxed(qcom_pcie, val, PCIE20_ELBI_SYS_CTRL);
+	dev_info(&pdev->dev, "wrote 0x%x to ELBI_SYS_CTRL\n", val);
 	wmb();
 
 	/* poll for link to come up for upto 100ms */
