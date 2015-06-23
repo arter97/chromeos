@@ -75,6 +75,9 @@
 #include "ecm_tracker_tcp.h"
 #include "ecm_db.h"
 #include "ecm_classifier_default.h"
+#ifdef ECM_CLASSIFIER_DSCP_ENABLE
+#include "ecm_classifier_dscp.h"
+#endif
 #include "ecm_interface.h"
 #include "ecm_nss_ipv4.h"
 #include "ecm_nss_ported_ipv4.h"
@@ -473,6 +476,19 @@ struct ecm_classifier_instance *ecm_nss_ipv4_assign_classifier(struct ecm_db_con
 	DEBUG_ASSERT(type != ECM_CLASSIFIER_TYPE_DEFAULT, "Must never need to instantiate default type in this way");
 
 
+#ifdef ECM_CLASSIFIER_DSCP_ENABLE
+	if (type == ECM_CLASSIFIER_TYPE_DSCP) {
+		struct ecm_classifier_dscp_instance *cdscpi;
+		cdscpi = ecm_classifier_dscp_instance_alloc(ci);
+		if (!cdscpi) {
+			DEBUG_TRACE("%p: Failed to create DSCP classifier\n", ci);
+			return NULL;
+		}
+		DEBUG_TRACE("%p: Created DSCP classifier: %p\n", ci, cdscpi);
+		ecm_db_connection_classifier_assign(ci, (struct ecm_classifier_instance *)cdscpi);
+		return (struct ecm_classifier_instance *)cdscpi;
+	}
+#endif
 
 
 	// GGG TODO Add other classifier types.

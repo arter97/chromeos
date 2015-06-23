@@ -75,6 +75,9 @@
 #include "ecm_tracker_tcp.h"
 #include "ecm_db.h"
 #include "ecm_classifier_default.h"
+#ifdef ECM_CLASSIFIER_DSCP_ENABLE
+#include "ecm_classifier_dscp.h"
+#endif
 #include "ecm_interface.h"
 #include "ecm_nss_ported_ipv4.h"
 #include "ecm_nss_ipv4.h"
@@ -593,6 +596,17 @@ static void ecm_nss_ported_ipv4_connection_accelerate(struct ecm_front_end_conne
 	nircm->qos_rule.return_qos_tag = (uint32_t)pr->return_qos_tag;
 	nircm->valid_flags |= NSS_IPV4_RULE_CREATE_QOS_VALID;
 
+#ifdef ECM_CLASSIFIER_DSCP_ENABLE
+	/*
+	 * DSCP information?
+	 */
+	if (pr->process_actions & ECM_CLASSIFIER_PROCESS_ACTION_DSCP) {
+		nircm->dscp_rule.flow_dscp = pr->flow_dscp;
+		nircm->dscp_rule.return_dscp = pr->return_dscp;
+		nircm->rule_flags |= NSS_IPV4_RULE_CREATE_FLAG_DSCP_MARKING;
+		nircm->valid_flags |= NSS_IPV4_RULE_CREATE_DSCP_MARKING_VALID;
+	}
+#endif
 	protocol = ecm_db_connection_protocol_get(feci->ci);
 
 	/*
@@ -2149,6 +2163,30 @@ unsigned int ecm_nss_ported_ipv4_process(struct net_device *out_dev, struct net_
 			prevalent_pr.return_qos_tag = aci_pr.return_qos_tag;
 		}
 
+#ifdef ECM_CLASSIFIER_DSCP_ENABLE
+		/*
+		 * If any classifier denied DSCP remarking then that overrides every classifier
+		 */
+		if (aci_pr.process_actions & ECM_CLASSIFIER_PROCESS_ACTION_DSCP_DENY) {
+			DEBUG_TRACE("%p: aci: %p, type: %d, DSCP remark denied\n",
+					ci, aci, aci->type_get(aci));
+			prevalent_pr.process_actions |= ECM_CLASSIFIER_PROCESS_ACTION_DSCP_DENY;
+			prevalent_pr.process_actions &= ~ECM_CLASSIFIER_PROCESS_ACTION_DSCP;
+		}
+
+		/*
+		 * DSCP remark action, but only if it has not been denied by any classifier
+		 */
+		if (aci_pr.process_actions & ECM_CLASSIFIER_PROCESS_ACTION_DSCP) {
+			if (!(prevalent_pr.process_actions & ECM_CLASSIFIER_PROCESS_ACTION_DSCP_DENY)) {
+				DEBUG_TRACE("%p: aci: %p, type: %d, DSCP remark wanted, flow_dscp: %u, return dscp: %u\n",
+						ci, aci, aci->type_get(aci), aci_pr.flow_dscp, aci_pr.return_dscp);
+				prevalent_pr.process_actions |= ECM_CLASSIFIER_PROCESS_ACTION_DSCP;
+				prevalent_pr.flow_dscp = aci_pr.flow_dscp;
+				prevalent_pr.return_dscp = aci_pr.return_dscp;
+			}
+		}
+#endif
 	}
 	ecm_db_connection_assignments_release(assignment_count, assignments);
 

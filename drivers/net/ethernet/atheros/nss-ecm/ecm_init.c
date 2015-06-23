@@ -42,6 +42,10 @@ extern int ecm_conntrack_notifier_init(struct dentry *dentry);
 extern void ecm_conntrack_notifier_stop(int);
 extern void ecm_conntrack_notifier_exit(void);
 
+#ifdef ECM_CLASSIFIER_DSCP_ENABLE
+extern int ecm_classifier_dscp_init(struct dentry *dentry);
+extern void ecm_classifier_dscp_exit(void);
+#endif
 
 #ifdef ECM_STATE_OUTPUT_ENABLE
 extern int ecm_state_init(struct dentry *dentry);
@@ -82,6 +86,13 @@ static int __init ecm_init(void)
 		goto err_cls_default;
 	}
 
+#ifdef ECM_CLASSIFIER_DSCP_ENABLE
+	ret = ecm_classifier_dscp_init(ecm_dentry);
+	if (0 != ret) {
+		goto err_cls_dscp;
+	}
+#endif
+
 	ret = ecm_interface_init();
 	if (0 != ret) {
 		goto err_iface;
@@ -118,6 +129,10 @@ err_ct:
 err_fe_ipv4:
 	ecm_interface_exit();
 err_iface:
+#ifdef ECM_CLASSIFIER_DSCP_ENABLE
+	ecm_classifier_dscp_exit();
+err_cls_dscp:
+#endif
 	ecm_classifier_default_exit();
 err_cls_default:
 	ecm_db_exit();
@@ -165,6 +180,10 @@ static void __exit ecm_exit(void)
 	ecm_front_end_ipv4_exit();
 	printk(KERN_INFO "exit interface\n");
 	ecm_interface_exit();
+#ifdef ECM_CLASSIFIER_DSCP_ENABLE
+	printk(KERN_INFO "exit dscp classifier\n");
+	ecm_classifier_dscp_exit();
+#endif
 	printk(KERN_INFO "exit default classifier\n");
 	ecm_classifier_default_exit();
 	printk(KERN_INFO "exit db\n");

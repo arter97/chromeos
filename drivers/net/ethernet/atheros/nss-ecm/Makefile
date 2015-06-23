@@ -31,6 +31,13 @@ ecm-y := \
 	 ecm_interface.o \
 	 ecm_init.o
 
+# #############################################################################
+# Define ECM_CLASSIFIER_DSCP_ENABLE=y in order to enable DSCP classifier.
+# #############################################################################
+ECM_CLASSIFIER_DSCP_ENABLE=y
+ecm-$(ECM_CLASSIFIER_DSCP_ENABLE) += ecm_classifier_dscp.o
+ccflags-$(ECM_CLASSIFIER_DSCP_ENABLE) += -DECM_CLASSIFIER_DSCP_ENABLE
+
 ##############################################################################
 # Define ECM_STATE_OUTPUT_ENABLE=y to support XML state output
 #############################################################################
@@ -44,6 +51,12 @@ ccflags-$(ECM_STATE_OUTPUT_ENABLE) += -DECM_STATE_OUTPUT_ENABLE
 ECM_DB_ADVANCED_STATS_ENABLE=y
 ccflags-$(ECM_DB_ADVANCED_STATS_ENABLE) += -DECM_DB_ADVANCED_STATS_ENABLE
 
+# #############################################################################
+# Debug flags, set these to = 0 if you want to disable all debugging for that
+# file.
+# By turning off debugs you gain maximum ECM performance.
+# #############################################################################
+ccflags-y += -DECM_CLASSIFIER_DSCP_DEBUG_LEVEL=1
 ccflags-y += -DECM_CLASSIFIER_DEFAULT_DEBUG_LEVEL=1
 ccflags-y += -DECM_DB_DEBUG_LEVEL=1
 ccflags-y += -DECM_FRONT_END_IPV4_DEBUG_LEVEL=1
