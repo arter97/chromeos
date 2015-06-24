@@ -114,7 +114,7 @@ int kbase_platform_dvfs_event(struct kbase_device *kbdev, u32 utilisation,
 	if (dvfs->enabled)
 		schedule_work(&dvfs->work);
 
-	return MALI_TRUE;
+	return 0;
 }
 
 int kbase_rk_dvfs_init(struct kbase_device *kbdev)
