@@ -174,6 +174,8 @@ enum MWIFIEX_802_11_PRIVACY_FILTER {
 #define TLV_TYPE_TDLS_IDLE_TIMEOUT  (PROPRIETARY_TLV_BASE_ID + 194)
 #define TLV_TYPE_SCAN_CHANNEL_GAP   (PROPRIETARY_TLV_BASE_ID + 197)
 #define TLV_TYPE_API_REV	    (PROPRIETARY_TLV_BASE_ID + 199)
+#define TLV_BTCOEX_WL_AGGR_WINSIZE  (PROPRIETARY_TLV_BASE_ID + 202)
+#define TLV_BTCOEX_WL_SCANTIME      (PROPRIETARY_TLV_BASE_ID + 203)
 
 #define MWIFIEX_TX_DATA_BUF_SIZE_2K        2048
 
@@ -478,6 +480,7 @@ enum P2P_MODES {
 #define EVENT_TDLS_GENERIC_EVENT        0x00000052
 #define EVENT_EXT_SCAN_REPORT           0x00000058
 #define EVENT_REMAIN_ON_CHAN_EXPIRED    0x0000005f
+#define EVENT_BT_COEX_WLAN_PARA_CHANGE  0X00000076
 
 #define EVENT_ID_MASK                   0xffff
 #define BSS_NUM_MASK                    0xf
@@ -1656,6 +1659,22 @@ struct host_cmd_tlv_channel_band {
 struct host_cmd_tlv_ageout_timer {
 	struct host_cmd_tlv tlv;
 	__le32 sta_ao_timer;
+} __packed;
+
+struct mwifiex_ie_types_btcoex_scan_time {
+	struct mwifiex_ie_types_header header;
+	u8 coex_scan;
+	u8 reserved;
+	u16 min_scan_time;
+	u16 max_scan_time;
+} __packed;
+
+struct mwifiex_ie_types_btcoex_aggr_win_size {
+	struct mwifiex_ie_types_header header;
+	u8 coex_win_size;
+	u8 tx_win_size;
+	u8 rx_win_size;
+	u8 reserved;
 } __packed;
 
 struct host_cmd_ds_version_ext {
