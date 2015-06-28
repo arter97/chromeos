@@ -19,6 +19,14 @@
 			af-gpios = <&gpio CAM_AF_PWDN GPIO_ACTIVE_HIGH>;
 			reset-gpios = <&gpio RCAM_RSTN GPIO_ACTIVE_HIGH>;
 		};
+
+		ad5823@c {
+			compatible = "adi,ad5823";
+			reg = <0xc>;
+			vdd-supply = <&pp2800l_fcam>;
+			af-pwdn-gpios = <&gpio CAM_AF_PWDN GPIO_ACTIVE_HIGH>;
+			vdd_af = "vdd";
+		};
 	};
 
 	tegra-camera-platform {
@@ -29,6 +37,9 @@
 				orientation = "0";
 				drivernode0 {
 					pcl_id = "s_IMX219";
+				};
+				drivernode1 {
+					pcl_id = "f_AD5823";
 				};
 			};
 		};
