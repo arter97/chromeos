@@ -655,16 +655,16 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 	/* wait 150ms for clock acquisition */
 	usleep_range(10000, 15000);
 
-	/* de-assert PCIe reset link to bring EP out of reset */
-	gpio_set_value(qcom_pcie->reset_gpio, 1);
-	usleep_range(10000, 15000);
-
 	/* enable link training */
 	val = qcom_elbi_readl_relaxed(qcom_pcie, PCIE20_ELBI_SYS_CTRL);
 	val |= PCIE20_ELBI_SYS_CTRL_LTSSM_EN;
 	qcom_elbi_writel_relaxed(qcom_pcie, val, PCIE20_ELBI_SYS_CTRL);
 	dev_info(&pdev->dev, "wrote 0x%x to ELBI_SYS_CTRL\n", val);
 	wmb();
+
+	/* de-assert PCIe reset link to bring EP out of reset */
+	gpio_set_value(qcom_pcie->reset_gpio, 1);
+	usleep_range(10000, 15000);
 
 	/* poll for link to come up for upto 100ms */
 	ret = readl_poll_timeout(
