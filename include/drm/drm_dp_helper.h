@@ -822,6 +822,7 @@ struct drm_dp_link_ops {
 
 struct drm_dp_link {
 	unsigned char revision;
+	unsigned char edp;
 	unsigned int rate;
 	unsigned int num_lanes;
 	unsigned long capabilities;

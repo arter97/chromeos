@@ -655,7 +655,7 @@ static void drm_dp_link_reset(struct drm_dp_link *link)
  */
 int drm_dp_link_probe(struct drm_dp_aux *aux, struct drm_dp_link *link)
 {
-	u8 values[7];
+	u8 values[16], value;
 	int err;
 
 	drm_dp_link_reset(link);
@@ -682,6 +682,34 @@ int drm_dp_link_probe(struct drm_dp_aux *aux, struct drm_dp_link *link)
 
 	if (values[6] & DP_SET_ANSI_8B10B)
 		link->capabilities |= DP_LINK_CAP_ANSI_8B10B;
+
+	if (values[13] & DP_ALTERNATE_SCRAMBLER_RESET_CAP) {
+		err = drm_dp_dpcd_readb(aux, DP_EDP_DPCD_REV, &value);
+		if (err < 0)
+			return err;
+
+		switch (value) {
+		case DP_EDP_11:
+			link->edp = 0x11;
+			break;
+
+		case DP_EDP_12:
+			link->edp = 0x12;
+			break;
+
+		case DP_EDP_13:
+			link->edp = 0x13;
+			break;
+
+		case DP_EDP_14:
+			link->edp = 0x14;
+			break;
+
+		default:
+			DRM_ERROR("unsupported eDP version: %02x\n", value);
+			break;
+		}
+	}
 
 	/* DP_TRAINING_AUX_RD_INTERVAL is in units of 4 milliseconds */
 	link->aux_rd_interval = values[14] * 4000;
