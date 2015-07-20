@@ -100,6 +100,11 @@
 	disable-wp;
 };
 
+&uart1 {
+       /* uart1 enabled already, but without rts/cts, add that in here */
+	pinctrl-0 = <&uart1_xfer &uart1_cts &uart1_rts>;
+};
+
 &vcc50_hdmi {
 	enable-active-high;
 	gpio = <&gpio5 19 GPIO_ACTIVE_HIGH>;
