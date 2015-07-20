@@ -34,6 +34,7 @@
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
 #include "../codecs/rt5677.h"
+#include "../codecs/nau8825.h"
 
 #include "tegra_asoc_pdata.h"
 #include "tegra_asoc_utils_alt.h"
@@ -179,6 +180,7 @@ static int tegra_t210ref_startup(struct snd_pcm_substream *substream)
 {
 	return 0;
 }
+
 static void tegra_t210ref_shutdown(struct snd_pcm_substream *substream)
 {
 	return;
@@ -433,16 +435,15 @@ static struct snd_soc_dai_link tegra_rt5677_dai[] = {
 			SND_SOC_DAIFMT_CBS_CFS,
 		.params = &tegra_rt5677_stream_params,
 		.playback_only = true,
-/*	},{
+	}, {
 		.name = "nau8825",
 		.stream_name = "Headset",
 		.codec_name = "nau8825.5-001a",
 		.cpu_dai_name = "rt5677-aif3",
-		.codec_dai_name = "nau8825-aif1",
+		.codec_dai_name = "nau8825-hifi",
 		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 			SND_SOC_DAIFMT_CBS_CFS,
 		.params = &tegra_rt5677_stream_params,
-*/
 	}
 };
 
