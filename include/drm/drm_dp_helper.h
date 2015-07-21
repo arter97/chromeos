@@ -824,8 +824,8 @@ struct drm_dp_link_ops {
 struct drm_dp_link {
 	unsigned char revision;
 	unsigned char edp;
-	unsigned int rate;
-	unsigned int num_lanes;
+	unsigned int max_lanes;
+	unsigned int max_rate;
 	unsigned long capabilities;
 	unsigned long aux_rd_interval;
 
@@ -833,6 +833,8 @@ struct drm_dp_link {
 	struct drm_dp_aux *aux;
 
 	struct drm_dp_link_train train;
+	unsigned int lanes;
+	unsigned int rate;
 };
 
 int drm_dp_link_probe(struct drm_dp_aux *aux, struct drm_dp_link *link);
