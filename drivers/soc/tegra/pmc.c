@@ -100,6 +100,10 @@
 
 #define GPU_RG_CNTRL			0x2d4
 
+#define PMC_FUSE_CTRL			0x450
+#define PMC_FUSE_CTRL_PS18_LATCH_SET    (1 << 8)
+#define PMC_FUSE_CTRL_PS18_LATCH_CLEAR  (1 << 9)
+
 struct tegra_pmc_soc {
 	unsigned int num_powergates;
 	const char *const *powergates;
@@ -108,6 +112,7 @@ struct tegra_pmc_soc {
 
 	bool has_tsense_reset;
 	bool has_gpu_clamps;
+	bool has_ps18;
 };
 
 /**
@@ -750,6 +755,44 @@ int tegra_io_rail_power_off(int id)
 }
 EXPORT_SYMBOL(tegra_io_rail_power_off);
 
+int tegra_fuse_ps18_latch_set(void)
+{
+	u32 reg;
+
+	if (!pmc->soc->has_ps18)
+		return -ENOSYS;
+
+	reg = tegra_pmc_readl(PMC_FUSE_CTRL);
+	reg &= ~(PMC_FUSE_CTRL_PS18_LATCH_CLEAR);
+	tegra_pmc_writel(reg, PMC_FUSE_CTRL);
+	mdelay(1);
+	reg |= (PMC_FUSE_CTRL_PS18_LATCH_SET);
+	tegra_pmc_writel(reg, PMC_FUSE_CTRL);
+	mdelay(1);
+
+	return 0;
+}
+EXPORT_SYMBOL(tegra_fuse_ps18_latch_set);
+
+int tegra_fuse_ps18_latch_clear(void)
+{
+	u32 reg;
+
+	if (!pmc->soc->has_ps18)
+		return -ENOSYS;
+
+	reg = tegra_pmc_readl(PMC_FUSE_CTRL);
+	reg &= ~(PMC_FUSE_CTRL_PS18_LATCH_SET);
+	tegra_pmc_writel(reg, PMC_FUSE_CTRL);
+	mdelay(1);
+	reg |= (PMC_FUSE_CTRL_PS18_LATCH_CLEAR);
+	tegra_pmc_writel(reg, PMC_FUSE_CTRL);
+	mdelay(1);
+
+	return 0;
+}
+EXPORT_SYMBOL(tegra_fuse_ps18_latch_clear);
+
 #ifdef CONFIG_PM_SLEEP
 enum tegra_suspend_mode tegra_pmc_get_suspend_mode(void)
 {
@@ -1225,6 +1268,7 @@ static const struct tegra_pmc_soc tegra210_pmc_soc = {
 	.cpu_powergates = tegra210_cpu_powergates,
 	.has_tsense_reset = true,
 	.has_gpu_clamps = true,
+	.has_ps18 = true,
 };
 
 static const struct of_device_id tegra_pmc_match[] = {

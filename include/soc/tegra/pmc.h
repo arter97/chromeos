@@ -139,6 +139,10 @@ int tegra_powergate_sequence_power_down(int id, struct clk *clk,
 
 int tegra_io_rail_power_on(int id);
 int tegra_io_rail_power_off(int id);
+
+int tegra_fuse_ps18_latch_set(void);
+int tegra_fuse_ps18_latch_clear(void);
+
 #else
 static inline int tegra_powergate_is_powered(int id)
 {
@@ -181,6 +185,17 @@ static inline int tegra_io_rail_power_off(int id)
 {
 	return -ENOSYS;
 }
+
+static inline int tegra_fuse_ps18_latch_set(void)
+{
+	return -ENOSYS;
+}
+
+static inline int tegra_fuse_ps18_latch_clear(void)
+{
+	return -ENOSYS;
+}
+
 #endif /* CONFIG_ARCH_TEGRA */
 
 #endif /* __SOC_TEGRA_PMC_H__ */
