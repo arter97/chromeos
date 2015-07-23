@@ -132,8 +132,10 @@ static int tegra_bo_iommu_map(struct tegra_drm *tegra, struct tegra_bo *bo)
 	if (!bo->mm)
 		return -ENOMEM;
 
+	mutex_lock(&tegra->mm_lock);
 	err = drm_mm_insert_node_generic(&tegra->mm, bo->mm, bo->gem.size,
 					 PAGE_SIZE, 0, 0, 0);
+	mutex_unlock(&tegra->mm_lock);
 	if (err < 0) {
 		dev_err(tegra->drm->dev, "out of I/O virtual memory: %zd\n",
 			err);
@@ -154,7 +156,9 @@ static int tegra_bo_iommu_map(struct tegra_drm *tegra, struct tegra_bo *bo)
 	return 0;
 
 remove:
+	mutex_lock(&tegra->mm_lock);
 	drm_mm_remove_node(bo->mm);
+	mutex_unlock(&tegra->mm_lock);
 free:
 	kfree(bo->mm);
 	return err;
@@ -166,7 +170,11 @@ static int tegra_bo_iommu_unmap(struct tegra_drm *tegra, struct tegra_bo *bo)
 		return 0;
 
 	iommu_unmap(tegra->domain, bo->paddr, bo->size);
+
+	mutex_lock(&tegra->mm_lock);
 	drm_mm_remove_node(bo->mm);
+	mutex_unlock(&tegra->mm_lock);
+
 	kfree(bo->mm);
 
 	return 0;
