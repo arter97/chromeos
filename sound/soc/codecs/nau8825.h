@@ -111,8 +111,13 @@
 #define NAU8825_SPKR_DWN1R_SHORT	(1 << 1) /* HPR pin, 0 - open, 1 - shorted to GND */
 #define NAU8825_SPKR_DWN1L_SHORT	(1 << 0) /* HPL pin, 0 - open, 1 - shorted to GND */
 
+/* JACK_DET_CTRL (0xd) */
+#define NAU8825_JACK_DET_RESTART	(1 << 9)
+
 /* IRQ_STATUS (0x10) */
 #define NAU8825_HEADSET_COMPLETION_IRQ	(1 << 10)
+#define NAU8825_SHORT_CIRCUIT_IRQ	(1 << 9)
+#define NAU8825_IMPEDANCE_MEAS_IRQ	(1 << 8)
 #define NAU8825_KEY_IRQ_MASK	(0x7 << 5)
 #define NAU8825_KEY_RELEASE_IRQ	(1 << 7)
 #define NAU8825_KEY_LONG_PRESS_IRQ	(1 << 6)
@@ -206,7 +211,6 @@
 #define NAU8825_ADC_VREFSEL_VMID_PLUS_1DB	(3 << 8)
 #define NAU8825_POWERUP_ADCL	(1 << 6)
 
-
 /* MIC_BIAS (0x74) */
 #define NAU8825_MICBIAS_POWERUP_SFT	8
 
@@ -236,5 +240,9 @@ enum {
 	NAU8825_CLK_MCLK = 0,
 	NAU8825_CLK_INTERNAL,
 };
+
+int nau8825_enable_jack_detect(struct snd_soc_codec *codec,
+				struct snd_soc_jack *jack);
+
 
 #endif  /* __NAU8825_H__ */
