@@ -706,6 +706,15 @@ config VIDEO_M52790
 	 module will be called m52790.
 endmenu
 
+config VIDEO_IMX208
+        tristate "IMX208 camera sensor support"
+        depends on I2C && ARCH_TEGRA
+        ---help---
+         This is a driver for the IMX208
+         camera sensor for use with the tegra isp.
+         The sensor has a maximum of 2MP
+         resolution.
+
 menu "Sensors used on soc_camera driver"
 
 if SOC_CAMERA
