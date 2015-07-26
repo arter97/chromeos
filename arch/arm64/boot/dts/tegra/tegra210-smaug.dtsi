@@ -83,10 +83,6 @@
 			status = "okay";
 		};
 		*/
-
-		i2c@546c0000 {
-			status = "okay";
-		};
 	};
 
 	gpu@57000000 {
