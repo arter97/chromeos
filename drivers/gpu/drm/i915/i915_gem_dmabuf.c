@@ -199,19 +199,24 @@ static int i915_gem_dmabuf_mmap(struct dma_buf *dma_buf, struct vm_area_struct *
 {
 	struct drm_i915_gem_object *obj = dma_buf_to_obj(dma_buf);
 	struct drm_device *dev = obj->base.dev;
+	int ret;
 
 	if (obj->base.size < vma->vm_end - vma->vm_start)
 		return -EINVAL;
 
-	vma->vm_flags |= VM_IO | VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP;
-	vma->vm_ops = dev->driver->gem_vm_ops;
-	vma->vm_private_data = &obj->base;
-	vma->vm_page_prot =
-		pgprot_writecombine(vm_get_page_prot(vma->vm_flags));
+	/* On non-LLC machines we'd need to be careful cause CPU and GPU don't
+	 * share the CPU's L3 cache and coherency may hurt when CPU mapping. */
+	if (!HAS_LLC(dev))
+		return -EINVAL;
 
-	vma->vm_ops->open(vma);
+	if (!obj->base.filp)
+		return -EINVAL;
 
-	return 0;
+	ret = obj->base.filp->f_op->mmap(obj->base.filp, vma);
+	fput(vma->vm_file);
+	vma->vm_file = get_file(obj->base.filp);
+
+	return ret;
 }
 
 static int i915_gem_begin_cpu_access(struct dma_buf *dma_buf, size_t start, size_t length, enum dma_data_direction direction)
