@@ -23,7 +23,7 @@
  */
 #include "priv.h"
 
-int
+static int
 gk104_ltc_init(struct nvkm_object *object)
 {
 	struct nvkm_ltc_priv *priv = (void *)object;

@@ -21,8 +21,6 @@
  *
  * Authors: Ben Skeggs
  */
-
-#include <subdev/ltc.h>
 #include <subdev/mmu.h>
 #include <subdev/fb.h>
 
@@ -82,7 +80,6 @@ nvkm_vm_map_sg_table(struct nvkm_vma *vma, u64 delta, u64 length,
 {
 	struct nvkm_vm *vm = vma->vm;
 	struct nvkm_mmu *mmu = vm->mmu;
-	struct nvkm_ltc *ltc = nvkm_ltc(mmu);
 	int big = vma->node->type != mmu->spg_shift;
 	u32 offset = vma->node->offset + (delta >> 12);
 	u32 bits = vma->node->type - 12;
@@ -143,7 +140,6 @@ nvkm_vm_map_sg_table(struct nvkm_vma *vma, u64 delta, u64 length,
 
 	}
 finish:
-	ltc->invalidate(ltc);
 	mmu->flush(vm);
 }
 
@@ -154,7 +150,6 @@ nvkm_vm_map_sg(struct nvkm_vma *vma, u64 delta, u64 length,
 	struct nvkm_vm *vm = vma->vm;
 	struct nvkm_mmu *mmu = vm->mmu;
 	dma_addr_t *list = mem->pages;
-	struct nvkm_ltc *ltc = nvkm_ltc(mmu);
 	int big = vma->node->type != mmu->spg_shift;
 	u32 offset = vma->node->offset + (delta >> 12);
 	u32 bits = vma->node->type - 12;
@@ -183,7 +178,6 @@ nvkm_vm_map_sg(struct nvkm_vma *vma, u64 delta, u64 length,
 		}
 	}
 
-	ltc->invalidate(ltc);
 	mmu->flush(vm);
 }
 
@@ -204,7 +198,6 @@ nvkm_vm_unmap_at(struct nvkm_vma *vma, u64 delta, u64 length)
 {
 	struct nvkm_vm *vm = vma->vm;
 	struct nvkm_mmu *mmu = vm->mmu;
-	struct nvkm_ltc *ltc = nvkm_ltc(mmu);
 	int big = vma->node->type != mmu->spg_shift;
 	u32 offset = vma->node->offset + (delta >> 12);
 	u32 bits = vma->node->type - 12;
@@ -232,7 +225,6 @@ nvkm_vm_unmap_at(struct nvkm_vma *vma, u64 delta, u64 length)
 		}
 	}
 
-	ltc->invalidate(ltc);
 	mmu->flush(vm);
 }
 

@@ -17,9 +17,6 @@ struct nvkm_ltc {
 	int zbc_max;
 	int (*zbc_color_get)(struct nvkm_ltc *, int index, const u32[4]);
 	int (*zbc_depth_get)(struct nvkm_ltc *, int index, const u32);
-
-	void (*invalidate)(struct nvkm_ltc *);
-	void (*flush)(struct nvkm_ltc *);
 };
 
 static inline struct nvkm_ltc *
@@ -30,7 +27,5 @@ nvkm_ltc(void *obj)
 
 extern struct nvkm_oclass *gf100_ltc_oclass;
 extern struct nvkm_oclass *gk104_ltc_oclass;
-extern struct nvkm_oclass *gk20a_ltc_oclass;
 extern struct nvkm_oclass *gm107_ltc_oclass;
-extern struct nvkm_oclass *gm20b_ltc_oclass;
 #endif
