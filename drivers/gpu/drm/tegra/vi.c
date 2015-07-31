@@ -80,7 +80,7 @@ static int vi_power_off(struct device *dev)
 
 	clk_disable_unprepare(vi->clk);
 
-	return tegra_powergate_power_off(vi->config->powergate_id);
+	return 0; //tegra_powergate_power_off(vi->config->powergate_id);
 }
 
 static int vi_power_on(struct device *dev)
@@ -245,7 +245,7 @@ static int vi_open_channel(struct tegra_drm_client *client,
 {
 	struct vi *vi = to_vi(client);
 
-	pm_runtime_get_sync(vi->dev);
+	//pm_runtime_get_sync(vi->dev);
 
 	context->channel = host1x_channel_get(vi->channel);
 	if (!context->channel)
@@ -264,8 +264,8 @@ static void vi_close_channel(struct tegra_drm_context *context)
 	host1x_channel_put(context->channel);
 	context->channel = NULL;
 
-	pm_runtime_mark_last_busy(vi->dev);
-	pm_runtime_put_autosuspend(vi->dev);
+       // pm_runtime_mark_last_busy(vi->dev);
+      //  pm_runtime_put_autosuspend(vi->dev);
 }
 
 static int vi_is_addr_reg(struct device *dev, u32 class, u32 offset)
@@ -368,10 +368,10 @@ static int vi_probe(struct platform_device *pdev)
 		goto error_vi_power_off;
 	}
 
-	pm_runtime_set_active(dev);
-	pm_runtime_enable(dev);
-	pm_runtime_use_autosuspend(dev);
-	pm_runtime_set_autosuspend_delay(dev, 5000);
+	//pm_runtime_set_active(dev);
+	//pm_runtime_enable(dev);
+	//pm_runtime_use_autosuspend(dev);
+	//pm_runtime_set_autosuspend_delay(dev, 5000);
 
 	dev_info(&pdev->dev, "initialized");
 
