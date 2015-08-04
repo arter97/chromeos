@@ -15,6 +15,7 @@
 
 #include <linux/dma-buf.h>
 #include <linux/iommu.h>
+#include <linux/workqueue.h>
 #include <drm/tegra_drm.h>
 
 #include "drm.h"
@@ -180,6 +181,48 @@ static int tegra_bo_iommu_unmap(struct tegra_drm *tegra, struct tegra_bo *bo)
 	return 0;
 }
 
+static void tegra_bo_free(struct drm_device *drm, struct tegra_bo *bo)
+{
+	if (bo->pages) {
+		drm_gem_put_pages(&bo->gem, bo->pages, true, true);
+		sg_free_table(bo->sgt);
+		kfree(bo->sgt);
+	} else if (bo->vaddr) {
+		dma_free_writecombine(drm->dev, bo->gem.size, bo->vaddr,
+				      bo->paddr);
+	}
+}
+
+static void tegra_bo_free_object_work(struct work_struct *work)
+{
+	struct drm_gem_object *gem =
+		container_of(work, typeof(*gem), tegra_bo_work);
+	struct drm_device *drm = gem->dev;
+	struct tegra_drm *tegra;
+	struct tegra_bo *bo;
+
+	msleep(50);
+
+	mutex_lock(&drm->struct_mutex);
+	tegra = gem->dev->dev_private;
+	bo = to_tegra_bo(gem);
+
+	if (tegra->domain)
+		tegra_bo_iommu_unmap(tegra, bo);
+
+	if (gem->import_attach) {
+		dma_buf_unmap_attachment(gem->import_attach, bo->sgt,
+					 DMA_TO_DEVICE);
+		drm_prime_gem_destroy(gem, NULL);
+	} else {
+		tegra_bo_free(gem->dev, bo);
+	}
+
+	drm_gem_object_release(gem);
+	kfree(bo);
+	mutex_unlock(&drm->struct_mutex);
+}
+
 static struct tegra_bo *tegra_bo_alloc_object(struct drm_device *drm,
 					      size_t size)
 {
@@ -196,6 +239,7 @@ static struct tegra_bo *tegra_bo_alloc_object(struct drm_device *drm,
 	err = drm_gem_object_init(drm, &bo->gem, size);
 	if (err < 0)
 		goto free;
+	INIT_WORK(&bo->gem.tegra_bo_work, tegra_bo_free_object_work);
 
 	err = drm_gem_create_mmap_offset(&bo->gem);
 	if (err < 0)
@@ -208,18 +252,6 @@ release:
 free:
 	kfree(bo);
 	return ERR_PTR(err);
-}
-
-static void tegra_bo_free(struct drm_device *drm, struct tegra_bo *bo)
-{
-	if (bo->pages) {
-		drm_gem_put_pages(&bo->gem, bo->pages, true, true);
-		sg_free_table(bo->sgt);
-		kfree(bo->sgt);
-	} else if (bo->vaddr) {
-		dma_free_writecombine(drm->dev, bo->gem.size, bo->vaddr,
-				      bo->paddr);
-	}
 }
 
 static int tegra_bo_get_pages(struct drm_device *drm, struct tegra_bo *bo)
@@ -402,22 +434,7 @@ free:
 
 void tegra_bo_free_object(struct drm_gem_object *gem)
 {
-	struct tegra_drm *tegra = gem->dev->dev_private;
-	struct tegra_bo *bo = to_tegra_bo(gem);
-
-	if (tegra->domain)
-		tegra_bo_iommu_unmap(tegra, bo);
-
-	if (gem->import_attach) {
-		dma_buf_unmap_attachment(gem->import_attach, bo->sgt,
-					 DMA_TO_DEVICE);
-		drm_prime_gem_destroy(gem, NULL);
-	} else {
-		tegra_bo_free(gem->dev, bo);
-	}
-
-	drm_gem_object_release(gem);
-	kfree(bo);
+	schedule_work(&gem->tegra_bo_work);
 }
 
 int tegra_bo_dumb_create(struct drm_file *file, struct drm_device *drm,

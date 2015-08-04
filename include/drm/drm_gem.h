@@ -41,6 +41,7 @@
 struct drm_gem_object {
 	/** Reference count of this object */
 	struct kref refcount;
+	struct work_struct tegra_bo_work;
 
 	/**
 	 * handle_count - gem file_priv handle count of this object
