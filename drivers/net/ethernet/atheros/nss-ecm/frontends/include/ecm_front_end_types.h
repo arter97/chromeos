@@ -1,6 +1,6 @@
 /*
  **************************************************************************
- * Copyright (c) 2014,2015 The Linux Foundation.  All rights reserved.
+ * Copyright (c) 2014-2015 The Linux Foundation.  All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -58,6 +58,12 @@ typedef void (*ecm_front_end_connection_ref_method_t)(struct ecm_front_end_conne
 typedef int (*ecm_front_end_connection_deref_callback_t)(struct ecm_front_end_connection_instance *feci);
 typedef void (*ecm_front_end_connection_action_seen_method_t)(struct ecm_front_end_connection_instance *feci);
 typedef void (*ecm_front_end_connection_accel_ceased_method_t)(struct ecm_front_end_connection_instance *feci);
+#ifdef ECM_STATE_OUTPUT_ENABLE
+typedef int (*ecm_front_end_connection_state_get_callback_t)(struct ecm_front_end_connection_instance *feci, struct ecm_state_file_instance *sfi);
+											/*
+											 * Get state output.  Return 0 on success.
+											 */
+#endif
 
 /*
  * Acceleration limiting modes.
@@ -97,6 +103,9 @@ struct ecm_front_end_connection_instance {
 	ecm_front_end_connection_accel_state_get_method_t accel_state_get;	/* Get the acceleration state */
 	ecm_front_end_connection_action_seen_method_t action_seen;		/* Acceleration action has occurred */
 	ecm_front_end_connection_accel_ceased_method_t accel_ceased;		/* Acceleration has stopped */
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	ecm_front_end_connection_state_get_callback_t state_get;		/* Obtain state for this object */
+#endif
 
 	/*
 	 * Accel/decel mode statistics.

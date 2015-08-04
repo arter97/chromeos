@@ -1,6 +1,6 @@
 /*
  **************************************************************************
- * Copyright (c) 2014,2015 The Linux Foundation.  All rights reserved.
+ * Copyright (c) 2014-2015 The Linux Foundation.  All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -60,6 +60,7 @@
 
 #include "ecm_types.h"
 #include "ecm_db_types.h"
+#include "ecm_state.h"
 #include "ecm_tracker.h"
 #include "ecm_tracker_tcp.h"
 
@@ -147,7 +148,7 @@ static ecm_db_timer_group_t ecm_tracker_tcp_timer_group_from_state[] = {
 							ECM_DB_TIMER_GROUPS_CONNECTION_TCP_RESET_TIMEOUT,	/* ECM_TRACKER_CONNECTION_STATE_FAULT */
 							};
 int ecm_tracker_tcp_count = 0;		/* Counts the number of TCP data trackers right now */
-spinlock_t ecm_tracker_tcp_lock;	/* Global lock for the tracker globals */
+static DEFINE_SPINLOCK(ecm_tracker_tcp_lock);	/* Global lock for the tracker globals */
 
 /*
  * ecm_tracker_tcp_connection_state_matrix[][]
@@ -505,6 +506,98 @@ static void ecm_tracker_tcp_state_get_callback(struct ecm_tracker_instance *ti, 
 	*tg = ecm_tracker_tcp_timer_group_from_state[*state];
 }
 
+#ifdef ECM_STATE_OUTPUT_ENABLE
+/*
+ * ecm_tracker_tcp_sender_state_get()
+ *	Return state
+ */
+static int ecm_tracker_tcp_sender_state_get(struct ecm_state_file_instance *sfi, ecm_tracker_sender_type_t sender,
+						struct ecm_tracker_tcp_sender_state *state)
+{
+	int result;
+
+	result = ecm_state_write(sfi, "state", "%s", ecm_tracker_sender_state_to_string(state->state));
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "syn_seq", "%u", state->syn_seq);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "fin_seq", "%u", state->fin_seq);
+	if (result)
+		return result;
+	return 0;
+}
+
+/*
+ * ecm_tracker_tcp_state_text_get_callback()
+ *	Return state
+ */
+static int ecm_tracker_tcp_state_text_get_callback(struct ecm_tracker_instance *ti, struct ecm_state_file_instance *sfi)
+{
+	int result;
+	struct ecm_tracker_tcp_internal_instance *ttii = (struct ecm_tracker_tcp_internal_instance *)ti;
+	struct ecm_tracker_tcp_sender_state sender_states[ECM_TRACKER_SENDER_MAX];
+	ecm_tracker_connection_state_t connection_state;
+	DEBUG_CHECK_MAGIC(ttii, ECM_TRACKER_TCP_INSTANCE_MAGIC, "%p: magic failed", ttii);
+
+	result = ecm_state_prefix_add(sfi, "tracker_tcp");
+	if (result)
+		return result;
+
+	/*
+	 * Capture state
+	 */
+	spin_lock_bh(&ttii->lock);
+	sender_states[ECM_TRACKER_SENDER_TYPE_SRC] = ttii->sender_states[ECM_TRACKER_SENDER_TYPE_SRC];
+	sender_states[ECM_TRACKER_SENDER_TYPE_DEST] = ttii->sender_states[ECM_TRACKER_SENDER_TYPE_DEST];
+	spin_unlock_bh(&ttii->lock);
+	connection_state = ecm_tracker_tcp_connection_state_matrix[sender_states[ECM_TRACKER_SENDER_TYPE_SRC].state][sender_states[ECM_TRACKER_SENDER_TYPE_DEST].state];
+
+	result = ecm_state_write(sfi, "connection_state", "%s", ecm_tracker_connection_state_to_string(connection_state));
+	if (result)
+		return result;
+
+	result = ecm_state_prefix_add(sfi, "senders");
+	if (result)
+		return result;
+
+	/*
+	 * Output src sender
+	 */
+	result = ecm_state_prefix_add(sfi, "src");
+	if (result)
+		return result;
+	result = ecm_tracker_tcp_sender_state_get(sfi,
+			ECM_TRACKER_SENDER_TYPE_SRC,
+			&sender_states[ECM_TRACKER_SENDER_TYPE_SRC]);
+	if (result)
+		return result;
+	result = ecm_state_prefix_remove(sfi);
+	if (result)
+		return result;
+
+	/*
+	 * Output dest sender
+	 */
+	result = ecm_state_prefix_add(sfi, "dest");
+	if (result)
+		return result;
+	result = ecm_tracker_tcp_sender_state_get(sfi,
+			ECM_TRACKER_SENDER_TYPE_DEST,
+			&sender_states[ECM_TRACKER_SENDER_TYPE_DEST]);
+	if (result)
+		return result;
+	result = ecm_state_prefix_remove(sfi);
+	if (result)
+		return result;
+
+	result = ecm_state_prefix_remove(sfi);
+	if (result)
+		return result;
+
+ 	return ecm_state_prefix_remove(sfi);
+}
+#endif
 
 /*
  * ecm_tracker_tcp_init()
@@ -535,6 +628,9 @@ struct ecm_tracker_tcp_instance *ecm_tracker_tcp_alloc(void)
 	ttii->tcp_base.base.deref = ecm_tracker_tcp_deref_callback;
 	ttii->tcp_base.base.state_update = ecm_tracker_tcp_state_update_callback;
 	ttii->tcp_base.base.state_get = ecm_tracker_tcp_state_get_callback;
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	ttii->tcp_base.base.state_text_get = ecm_tracker_tcp_state_text_get_callback;
+#endif
 
 	spin_lock_init(&ttii->lock);
 
@@ -550,24 +646,3 @@ struct ecm_tracker_tcp_instance *ecm_tracker_tcp_alloc(void)
 	return (struct ecm_tracker_tcp_instance *)ttii;
 }
 EXPORT_SYMBOL(ecm_tracker_tcp_alloc);
-
-
-/*
- * ecm_tracker_tcp_module_init()
- */
-int ecm_tracker_tcp_module_init(void)
-{
-	DEBUG_INFO("TCP Tracker Module init\n");
-	spin_lock_init(&ecm_tracker_tcp_lock);
-	return 0;
-}
-EXPORT_SYMBOL(ecm_tracker_tcp_module_init);
-
-/*
- * ecm_tracker_tcp_module_exit()
- */
-void ecm_tracker_tcp_module_exit(void)
-{
-	DEBUG_INFO("TCP Tracker Module exit\n");
-}
-EXPORT_SYMBOL(ecm_tracker_tcp_module_exit);

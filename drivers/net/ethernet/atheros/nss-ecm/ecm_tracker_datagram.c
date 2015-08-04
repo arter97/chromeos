@@ -1,6 +1,6 @@
 /*
  **************************************************************************
- * Copyright (c) 2014, 2015, The Linux Foundation.  All rights reserved.
+ * Copyright (c) 2014-2015, The Linux Foundation.  All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -60,6 +60,7 @@
 
 #include "ecm_types.h"
 #include "ecm_db_types.h"
+#include "ecm_state.h"
 #include "ecm_tracker.h"
 #include "ecm_tracker_datagram.h"
 
@@ -87,7 +88,7 @@ struct ecm_tracker_datagram_internal_instance {
 };
 
 int ecm_tracker_datagram_count = 0;		/* Counts the number of DATAGRAM data trackers right now */
-spinlock_t ecm_tracker_datagram_lock;		/* Global lock for the tracker globals */
+static DEFINE_SPINLOCK(ecm_tracker_datagram_lock);		/* Global lock for the tracker globals */
 
 /*
  * ecm_trracker_datagram_connection_state_matrix[][]
@@ -210,6 +211,49 @@ static void ecm_tracker_datagram_state_get_callback(struct ecm_tracker_instance 
 	*tg = ECM_DB_TIMER_GROUPS_CONNECTION_GENERIC_TIMEOUT;
 }
 
+#ifdef ECM_STATE_OUTPUT_ENABLE
+/*
+ * ecm_tracker_datagram_state_text_get_callback()
+ *	Return state
+ */
+static int ecm_tracker_datagram_state_text_get_callback(struct ecm_tracker_instance *ti, struct ecm_state_file_instance *sfi)
+{
+	int result;
+	struct ecm_tracker_datagram_internal_instance *dtii = (struct ecm_tracker_datagram_internal_instance *)ti;
+	ecm_tracker_sender_state_t sender_state[ECM_TRACKER_SENDER_MAX];
+	ecm_tracker_connection_state_t connection_state;
+
+	DEBUG_CHECK_MAGIC(dtii, ECM_TRACKER_DATAGRAM_INSTANCE_MAGIC, "%p: magic failed", dtii);
+
+	result = ecm_state_prefix_add(sfi, "tracker_datagram");
+	if (result)
+		return result;
+
+	/*
+	 * Capture state
+	 */
+	spin_lock_bh(&dtii->lock);
+	sender_state[ECM_TRACKER_SENDER_TYPE_SRC] = dtii->sender_state[ECM_TRACKER_SENDER_TYPE_SRC];
+	sender_state[ECM_TRACKER_SENDER_TYPE_DEST] = dtii->sender_state[ECM_TRACKER_SENDER_TYPE_DEST];
+	spin_unlock_bh(&dtii->lock);
+
+	connection_state = ecm_tracker_datagram_connection_state_matrix[sender_state[ECM_TRACKER_SENDER_TYPE_SRC]][sender_state[ECM_TRACKER_SENDER_TYPE_DEST]];
+	result = ecm_state_write(sfi, "timer_group", "%d", ECM_DB_TIMER_GROUPS_CONNECTION_GENERIC_TIMEOUT);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "src_sender_state", "%s", ecm_tracker_sender_state_to_string(sender_state[ECM_TRACKER_SENDER_TYPE_SRC]));
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "dest_sender_state", "%s", ecm_tracker_sender_state_to_string(sender_state[ECM_TRACKER_SENDER_TYPE_DEST]));
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "connection_state", "%s", ecm_tracker_connection_state_to_string(connection_state));
+	if (result)
+		return result;
+
+ 	return ecm_state_prefix_remove(sfi);
+}
+#endif
 
 /*
  * ecm_tracker_datagram_init()
@@ -241,6 +285,9 @@ struct ecm_tracker_datagram_instance *ecm_tracker_datagram_alloc(void)
 	dtii->datagram_base.base.deref = ecm_tracker_datagram_deref_callback;
 	dtii->datagram_base.base.state_update = ecm_tracker_datagram_state_update_callback;
 	dtii->datagram_base.base.state_get = ecm_tracker_datagram_state_get_callback;
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	dtii->datagram_base.base.state_text_get = ecm_tracker_datagram_state_text_get_callback;
+#endif
 
 	// GGG TODO IMPLEMENT METHODS SPECIFIC TO WORKING WITH datagram e.g. reading without worrying about the datagram header content
 
@@ -258,23 +305,3 @@ struct ecm_tracker_datagram_instance *ecm_tracker_datagram_alloc(void)
 	return (struct ecm_tracker_datagram_instance *)dtii;
 }
 EXPORT_SYMBOL(ecm_tracker_datagram_alloc);
-
-/*
- * ecm_tracker_datagram_module_init()
- */
-int ecm_tracker_datagram_module_init(void)
-{
-	DEBUG_INFO("Datagram Tracker Module init\n");
-	spin_lock_init(&ecm_tracker_datagram_lock);
-	return 0;
-}
-EXPORT_SYMBOL(ecm_tracker_datagram_module_init);
-
-/*
- * ecm_tracker_datagram_module_exit()
- */
-void ecm_tracker_datagram_module_exit(void)
-{
-	DEBUG_INFO("Datagram Tracker Module exit\n");
-}
-EXPORT_SYMBOL(ecm_tracker_datagram_module_exit);

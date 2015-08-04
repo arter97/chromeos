@@ -1,6 +1,6 @@
 /*
  **************************************************************************
- * Copyright (c) 2014, 2015, The Linux Foundation.  All rights reserved.
+ * Copyright (c) 2014-2015, The Linux Foundation.  All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -60,9 +60,8 @@
 
 #include "ecm_types.h"
 #include "ecm_db_types.h"
+#include "ecm_state.h"
 #include "ecm_tracker.h"
-
-spinlock_t ecm_tracker_lock;				/* Global lock for the tracker globals */
 
 struct ecm_tracker_ip_protocols;
 
@@ -746,23 +745,3 @@ const char *ecm_tracker_connection_state_to_string(enum ecm_tracker_connection_s
 	return ecm_tracker_connection_state_strings[s];
 }
 EXPORT_SYMBOL(ecm_tracker_connection_state_to_string);
-
-/*
- * ecm_tracker_init()
- */
-int ecm_tracker_init(void)
-{
-	DEBUG_INFO("Tracker Module init\n");
-	spin_lock_init(&ecm_tracker_lock);
-	return 0;
-}
-EXPORT_SYMBOL(ecm_tracker_init);
-
-/*
- * ecm_tracker_exit()
- */
-void ecm_tracker_exit(void)
-{
-	DEBUG_INFO("Tracker Module exit\n");
-}
-EXPORT_SYMBOL(ecm_tracker_exit);

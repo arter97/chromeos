@@ -1,6 +1,6 @@
 /*
  **************************************************************************
- * Copyright (c) 2014,2015, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2015, The Linux Foundation. All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -21,10 +21,8 @@
 #include <linux/module.h>
 #include <linux/skbuff.h>
 #include <linux/icmp.h>
-#include <linux/sysctl.h>
 #include <linux/kthread.h>
-#include <linux/device.h>
-#include <linux/fs.h>
+#include <linux/debugfs.h>
 #include <linux/pkt_sched.h>
 #include <linux/string.h>
 #include <linux/random.h>
@@ -63,6 +61,7 @@
 
 #include "ecm_types.h"
 #include "ecm_db_types.h"
+#include "ecm_state.h"
 #include "ecm_tracker.h"
 #include "ecm_classifier.h"
 #include "ecm_front_end_types.h"
@@ -167,6 +166,13 @@ static int ecm_db_listeners_count = 0;			/* Number of listeners allocated */
 static struct ecm_db_listener_instance *ecm_db_listeners = NULL;
 							/* Event listeners */
 
+#ifdef ECM_STATE_OUTPUT_ENABLE
+/*
+ * ecm_db_iface_state_get_method_t
+ *	Used to obtain interface state
+ */
+typedef int (*ecm_db_iface_state_get_method_t)(struct ecm_db_iface_instance *ii, struct ecm_state_file_instance *sfi);
+#endif
 
 /*
  * struct ecm_db_iface_instance
@@ -218,6 +224,9 @@ struct ecm_db_iface_instance {
 		struct ecm_db_interface_info_loopback loopback;		/* type == ECM_DB_IFACE_TYPE_LOOPBACK */
 	} type_info;
 
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	ecm_db_iface_state_get_method_t state_get;	/* Type specific method to return state */
+#endif
 
 	ecm_db_iface_final_callback_t final;		/* Callback to owner when object is destroyed */
 	void *arg;					/* Argument returned to owner in callbacks */
@@ -646,7 +655,7 @@ static int ecm_db_connection_count_by_protocol[ECM_DB_PROTOCOL_COUNT];	/* Each I
 /*
  * Locking of the database - concurrency control
  */
-static spinlock_t ecm_db_lock;					/* Protect the table from SMP access. */
+static DEFINE_SPINLOCK(ecm_db_lock);					/* Protect the table from SMP access. */
 
 /*
  * Connection validity
@@ -654,9 +663,9 @@ static spinlock_t ecm_db_lock;					/* Protect the table from SMP access. */
 static uint16_t ecm_db_classifier_generation = 0;		/* Generation counter to detect out of date connections that should be reclassified */
 
 /*
- * System device linkage
+ * Debugfs dentry object.
  */
-static struct device ecm_db_dev;				/* System device linkage */
+static struct dentry *ecm_db_dentry;
 
 /*
  * Management thread control
@@ -5630,6 +5639,1047 @@ void ecm_db_node_add(struct ecm_db_node_instance *ni, struct ecm_db_iface_instan
 }
 EXPORT_SYMBOL(ecm_db_node_add);
 
+/*
+ * ecm_db_adv_stats_state_write()
+ *	Write out advanced stats state
+ */
+static int ecm_db_adv_stats_state_write(struct ecm_state_file_instance *sfi,uint64_t from_data_total, uint64_t to_data_total,
+				uint64_t from_packet_total, uint64_t to_packet_total, uint64_t from_data_total_dropped,
+				uint64_t to_data_total_dropped, uint64_t from_packet_total_dropped, uint64_t to_packet_total_dropped)
+{
+	int result;
+
+	result = ecm_state_prefix_add(sfi, "adv_stats");
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "from_data_total", "%llu", from_data_total);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "to_data_total", "%llu", to_data_total);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "from_packet_total", "%llu", from_packet_total);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "to_packet_total", "%llu", to_packet_total);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "from_data_total_dropped", "%llu", from_data_total_dropped);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "to_data_total_dropped", "%llu", to_data_total_dropped);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "from_packet_total_dropped", "%llu", from_packet_total_dropped);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "to_packet_total_dropped", "%llu", to_packet_total_dropped);
+	if (result)
+		return result;
+
+	return ecm_state_prefix_remove(sfi);
+}
+
+#ifdef ECM_STATE_OUTPUT_ENABLE
+/*
+ * ecm_db_iface_state_get_base()
+ *	Get the basic state for an interface object
+ */
+static int ecm_db_iface_state_get_base(struct ecm_db_iface_instance *ii, struct ecm_state_file_instance *sfi)
+{
+	int result;
+#ifdef ECM_DB_XREF_ENABLE
+	int node_count;
+#endif
+	uint32_t time_added;
+	int32_t interface_identifier;
+	int32_t nss_interface_identifier;
+	char name[IFNAMSIZ];
+	int32_t mtu;
+	ecm_db_iface_type_t type;
+
+	DEBUG_CHECK_MAGIC(ii, ECM_DB_IFACE_INSTANCE_MAGIC, "%p: magic failed\n", ii);
+	DEBUG_TRACE("%p: Open iface msg\n", ii);
+
+	result = ecm_state_prefix_add(sfi, "iface");
+	if (result)
+		return result;
+
+#ifdef ECM_DB_XREF_ENABLE
+	node_count = ecm_db_iface_node_count_get(ii);
+#endif
+	time_added = ii->time_added;
+	type = ii->type;
+	interface_identifier = ii->interface_identifier;
+	nss_interface_identifier = ii->nss_interface_identifier;
+	spin_lock_bh(&ecm_db_lock);
+	strcpy(name, ii->name);
+	mtu = ii->mtu;
+	spin_unlock_bh(&ecm_db_lock);
+
+
+	result = ecm_state_write(sfi, "type", "%d", type);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "name", "%s", name);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "time_added", "%u", time_added);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "mtu", "%d", mtu);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "interface_identifier", "%d", interface_identifier);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "nss_interface_identifier", "%d", nss_interface_identifier);
+	if (result)
+		return result;
+
+#ifdef ECM_DB_XREF_ENABLE
+	result = ecm_state_write(sfi, "nodes", "%d", node_count);
+	if (result)
+		return result;
+#endif
+
+	return ecm_state_prefix_remove(sfi);
+}
+
+/*
+ * ecm_db_iface_ethernet_state_get()
+ * 	Return interface type specific state
+ */
+static int ecm_db_iface_ethernet_state_get(struct ecm_db_iface_instance *ii, struct ecm_state_file_instance *sfi)
+{
+	int result;
+	uint8_t address[ETH_ALEN];
+
+	DEBUG_CHECK_MAGIC(ii, ECM_DB_IFACE_INSTANCE_MAGIC, "%p: magic failed\n", ii);
+	spin_lock_bh(&ecm_db_lock);
+	memcpy(address, ii->type_info.ethernet.address, ETH_ALEN);
+	spin_unlock_bh(&ecm_db_lock);
+
+	result = ecm_state_prefix_add(sfi, "ethernet");
+	if (result)
+		return result;
+
+	result = ecm_db_iface_state_get_base(ii, sfi);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "address", "%pM", address);
+	if (result)
+		return result;
+
+	return ecm_state_prefix_remove(sfi);
+}
+
+
+/*
+ * ecm_db_iface_bridge_state_get()
+ * 	Return interface type specific state
+ */
+static int ecm_db_iface_bridge_state_get(struct ecm_db_iface_instance *ii, struct ecm_state_file_instance *sfi)
+{
+	int result;
+	uint8_t address[ETH_ALEN];
+
+	DEBUG_CHECK_MAGIC(ii, ECM_DB_IFACE_INSTANCE_MAGIC, "%p: magic failed\n", ii);
+	spin_lock_bh(&ecm_db_lock);
+	memcpy(address, ii->type_info.bridge.address, ETH_ALEN);
+	spin_unlock_bh(&ecm_db_lock);
+
+	result = ecm_state_prefix_add(sfi, "bridge");
+	if (result)
+		return result;
+	result = ecm_db_iface_state_get_base(ii, sfi);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "address", "%pM", address);
+	if (result)
+		return result;
+
+	return ecm_state_prefix_remove(sfi);
+}
+
+
+
+/*
+ * ecm_db_iface_unknown_state_get()
+ * 	Return interface type specific state
+ */
+static int ecm_db_iface_unknown_state_get(struct ecm_db_iface_instance *ii, struct ecm_state_file_instance *sfi)
+{
+	int result;
+	uint32_t os_specific_ident;
+
+	DEBUG_CHECK_MAGIC(ii, ECM_DB_IFACE_INSTANCE_MAGIC, "%p: magic failed\n", ii);
+	spin_lock_bh(&ecm_db_lock);
+	os_specific_ident = ii->type_info.unknown.os_specific_ident;
+	spin_unlock_bh(&ecm_db_lock);
+
+	result = ecm_state_prefix_add(sfi, "pppoe");
+	if (result)
+		return result;
+	result = ecm_db_iface_state_get_base(ii, sfi);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "os_specific_ident", "%u", os_specific_ident);
+	if (result)
+		return result;
+
+	return ecm_state_prefix_remove(sfi);
+}
+
+/*
+ * ecm_db_iface_loopback_state_get()
+ * 	Return interface type specific state
+ */
+static int ecm_db_iface_loopback_state_get(struct ecm_db_iface_instance *ii, struct ecm_state_file_instance *sfi)
+{
+	int result;
+	uint32_t os_specific_ident;
+
+	DEBUG_CHECK_MAGIC(ii, ECM_DB_IFACE_INSTANCE_MAGIC, "%p: magic failed\n", ii);
+	spin_lock_bh(&ecm_db_lock);
+	os_specific_ident = ii->type_info.loopback.os_specific_ident;
+	spin_unlock_bh(&ecm_db_lock);
+
+	result = ecm_state_prefix_add(sfi, "loopback");
+	if (result)
+		return result;
+	result = ecm_db_iface_state_get_base(ii, sfi);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "os_specific_ident", "%u", os_specific_ident);
+	if (result)
+		return result;
+
+	return ecm_state_prefix_remove(sfi);
+}
+
+
+
+
+/*
+ * ecm_db_iface_state_get()
+ *	Obtain state for the interface.
+ *
+ * State specific to the interface type will be returned.
+ */
+int ecm_db_iface_state_get(struct ecm_state_file_instance *sfi, struct ecm_db_iface_instance *ii)
+{
+	int result;
+
+	DEBUG_CHECK_MAGIC(ii, ECM_DB_IFACE_INSTANCE_MAGIC, "%p: magic failed\n", ii);
+
+	result = ecm_state_prefix_add(sfi, "iface");
+	if (result)
+		return result;
+
+	result = ii->state_get(ii, sfi);
+	if (result)
+		return result;
+
+	return ecm_state_prefix_remove(sfi);
+
+}
+EXPORT_SYMBOL(ecm_db_iface_state_get);
+
+/*
+ * ecm_db_connection_heirarchy_state_get()
+ *	Output state for an interface heirarchy list.
+ */
+static int ecm_db_connection_heirarchy_state_get(struct ecm_state_file_instance *sfi, struct ecm_db_iface_instance *interfaces[], int32_t first_interface)
+{
+	int result;
+	int count;
+	int i;
+	int j;
+
+	count = ECM_DB_IFACE_HEIRARCHY_MAX - first_interface;
+	result = ecm_state_write(sfi, "interface_count", "%d", count);
+	if (result)
+		return result;
+
+	/*
+	 * Iterate the interface heirarchy list and output the information
+	 */
+	for (i = first_interface, j = 0; i < ECM_DB_IFACE_HEIRARCHY_MAX; ++i, ++j) {
+		struct ecm_db_iface_instance *ii = interfaces[i];
+		DEBUG_TRACE("Output interface @ %d: %p\n", i, ii);
+
+		result = ecm_state_prefix_index_add(sfi, j);
+		if (result)
+		  return result;
+		result = ii->state_get(ii, sfi);
+		if (result) {
+		  return result;
+		}
+		result = ecm_state_prefix_remove(sfi);
+		if (result)
+		  return result;
+	}
+
+	return 0;
+}
+
+/*
+ * ecm_db_connection_state_get()
+ *	Prepare a connection message
+ */
+int ecm_db_connection_state_get(struct ecm_state_file_instance *sfi, struct ecm_db_connection_instance *ci)
+{
+	int result;
+	long int expires_in;
+	int sport;
+	int sport_nat;
+	char snode_address[25];
+	char snode_address_nat[25];
+	char sip_address[50];
+	char sip_address_nat[50];
+	char dnode_address[25];
+	char dnode_address_nat[25];
+	int dport;
+	int dport_nat;
+	char dip_address[50];
+	char dip_address_nat[50];
+	ecm_db_direction_t direction;
+	int protocol;
+	bool is_routed;
+	uint32_t generations;
+	uint32_t time_added;
+	uint32_t serial;
+	uint64_t from_data_total;
+	uint64_t to_data_total;
+	uint64_t from_packet_total;
+	uint64_t to_packet_total;
+	uint64_t from_data_total_dropped;
+	uint64_t to_data_total_dropped;
+	uint64_t from_packet_total_dropped;
+	uint64_t to_packet_total_dropped;
+	struct ecm_db_host_instance *hi;
+	struct ecm_db_node_instance *ni;
+	int aci_index;
+	int aci_count;
+	struct ecm_front_end_connection_instance *feci;
+	struct ecm_classifier_instance *assignments[ECM_CLASSIFIER_TYPES];
+	int32_t first_interface;
+	struct ecm_db_iface_instance *interfaces[ECM_DB_IFACE_HEIRARCHY_MAX];
+
+	DEBUG_TRACE("Prep conn msg for %p\n", ci);
+
+	/*
+	 * Identify expiration
+	 */
+	spin_lock_bh(&ecm_db_lock);
+	if (ci->defunct_timer.group == ECM_DB_TIMER_GROUPS_MAX) {
+		expires_in = -1;
+	} else {
+		expires_in = (long int)(ci->defunct_timer.timeout - ecm_db_time);
+		if (expires_in <= 0) {
+			expires_in = 0;
+		}
+	}
+	spin_unlock_bh(&ecm_db_lock);
+
+	/*
+	 * Extract information from the connection for inclusion into the message
+	 */
+	sport = ci->mapping_from->port;
+	sport_nat = ci->mapping_nat_from->port;
+	dport = ci->mapping_to->port;
+	dport_nat = ci->mapping_nat_to->port;
+
+	hi = ci->mapping_to->host;
+	ecm_ip_addr_to_string(dip_address, hi->address);
+	ni = ci->to_node;
+	sprintf(dnode_address, "%pM", ni->address);
+	hi = ci->mapping_nat_to->host;
+	ecm_ip_addr_to_string(dip_address_nat, hi->address);
+
+	hi = ci->mapping_from->host;
+	ecm_ip_addr_to_string(sip_address, hi->address);
+	ni = ci->from_node;
+	sprintf(snode_address, "%pM", ni->address);
+	hi = ci->mapping_nat_from->host;
+	ecm_ip_addr_to_string(sip_address_nat, hi->address);
+
+	ni = ci->to_nat_node;
+	sprintf(dnode_address_nat, "%pM", ni->address);
+
+	ni = ci->from_nat_node;
+	sprintf(snode_address_nat, "%pM", ni->address);
+
+	direction = ci->direction;
+	protocol = ci->protocol;
+	is_routed = ci->is_routed;
+	generations = ci->generations;
+	time_added = ci->time_added;
+	serial = ci->serial;
+	ecm_db_connection_data_stats_get(ci, &from_data_total, &to_data_total,
+			&from_packet_total, &to_packet_total,
+			&from_data_total_dropped, &to_data_total_dropped,
+			&from_packet_total_dropped, &to_packet_total_dropped);
+
+	result = ecm_state_prefix_add(sfi, "conn");
+	if (result)
+		return result;
+	result = ecm_state_prefix_index_add(sfi, serial);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "serial", "%u", serial);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "sip_address", "%s", sip_address);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "sip_address_nat", "%s", sip_address_nat);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "sport", "%d", sport);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "sport_nat", "%d", sport_nat);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "snode_address", "%s", snode_address);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "snode_address_nat", "%s", snode_address_nat);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "dip_address", "%s", dip_address);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "dip_address_nat", "%s", dip_address_nat);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "dport", "%d", dport);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "dport_nat", "%d", dport_nat);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "dnode_address", "%s", dnode_address);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "dnode_address_nat", "%s", dnode_address_nat);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "protocol", "%d", protocol);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "is_routed", "%d", is_routed);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "expires", "%ld", expires_in);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "direction", "%d", direction);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "time_added", "%u", time_added);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "generations", "%u", generations);
+	if (result)
+		return result;
+
+	/*
+	 * NOTE: These advanced stats are not conditional compiled.
+	 * Connections always contain these stats
+	 */
+	result = ecm_db_adv_stats_state_write(sfi, from_data_total, to_data_total,
+			from_packet_total, to_packet_total, from_data_total_dropped,
+			to_data_total_dropped, from_packet_total_dropped,
+			to_packet_total_dropped);
+	if (result)
+		return result;
+
+	result = ecm_state_prefix_add(sfi, "from_interfaces");
+	if (result)
+		return result;
+	first_interface = ecm_db_connection_from_interfaces_get_and_ref(ci, interfaces);
+	result = ecm_db_connection_heirarchy_state_get(sfi, interfaces, first_interface);
+	ecm_db_connection_interfaces_deref(interfaces, first_interface);
+	if (result) {
+		return result;
+	}
+	result = ecm_state_prefix_remove(sfi);
+	if (result)
+		return result;
+
+	result = ecm_state_prefix_add(sfi, "to_interfaces");
+	if (result)
+		return result;
+	first_interface = ecm_db_connection_to_interfaces_get_and_ref(ci, interfaces);
+	result = ecm_db_connection_heirarchy_state_get(sfi, interfaces, first_interface);
+	ecm_db_connection_interfaces_deref(interfaces, first_interface);
+	if (result) {
+		return result;
+	}
+	result = ecm_state_prefix_remove(sfi);
+	if (result)
+		return result;
+
+	result = ecm_state_prefix_add(sfi, "from_nat_interfaces");
+	if (result)
+		return result;
+	first_interface = ecm_db_connection_from_nat_interfaces_get_and_ref(ci, interfaces);
+	result = ecm_db_connection_heirarchy_state_get(sfi, interfaces, first_interface);
+	ecm_db_connection_interfaces_deref(interfaces, first_interface);
+	if (result) {
+		return result;
+	}
+	result = ecm_state_prefix_remove(sfi);
+	if (result)
+		return result;
+
+	result = ecm_state_prefix_add(sfi, "to_nat_interfaces");
+	if (result)
+		return result;
+	first_interface = ecm_db_connection_to_nat_interfaces_get_and_ref(ci, interfaces);
+	result = ecm_db_connection_heirarchy_state_get(sfi, interfaces, first_interface);
+	ecm_db_connection_interfaces_deref(interfaces, first_interface);
+	if (result) {
+		return result;
+	}
+	result = ecm_state_prefix_remove(sfi);
+	if (result)
+		return result;
+
+	/*
+	 * Output front end state
+	 */
+	feci = ecm_db_connection_front_end_get_and_ref(ci);
+	result = feci->state_get(feci, sfi);
+	feci->deref(feci);
+	if (result) {
+		return result;
+	}
+
+	result = ecm_state_prefix_add(sfi, "classifiers");
+	if (result)
+		return result;
+
+	/*
+	 * Grab references to the assigned classifiers so we can produce state for them
+	 */
+	aci_count = ecm_db_connection_classifier_assignments_get_and_ref(ci, assignments);
+
+	/*
+	 * Iterate the assigned classifiers and provide a state record for each
+	 */
+	for (aci_index = 0; aci_index < aci_count; ++aci_index) {
+		struct ecm_classifier_instance *aci;
+
+		aci = assignments[aci_index];
+		result = aci->state_get(aci, sfi);
+		if (result) {
+			ecm_db_connection_assignments_release(aci_count, assignments);
+			return result;
+		}
+	}
+
+	ecm_db_connection_assignments_release(aci_count, assignments);
+
+	result = ecm_state_prefix_remove(sfi);
+	if (result)
+		return result;
+
+	result = ecm_state_prefix_remove(sfi);
+	if (result)
+		return result;
+
+	return ecm_state_prefix_remove(sfi);
+}
+EXPORT_SYMBOL(ecm_db_connection_state_get);
+
+/*
+ * ecm_db_mapping_state_get()
+ *	Prepare a mapping message
+ */
+int ecm_db_mapping_state_get(struct ecm_state_file_instance *sfi, struct ecm_db_mapping_instance *mi)
+{
+	int result;
+	int port;
+	char address[25];
+	int tcp_from;
+	int tcp_to;
+	int udp_from;
+	int udp_to;
+	int from;
+	int to;
+	int tcp_nat_from;
+	int tcp_nat_to;
+	int udp_nat_from;
+	int udp_nat_to;
+	int nat_from;
+	int nat_to;
+	uint32_t time_added;
+	struct ecm_db_host_instance *hi;
+
+	DEBUG_TRACE("Prep mapping msg for %p\n", mi);
+
+	/*
+	 * Create a small xml stats element for our mapping.
+	 * Extract information from the mapping for inclusion into the message
+	 */
+	ecm_db_mapping_port_count_get(mi, &tcp_from, &tcp_to, &udp_from, &udp_to, &from, &to,
+			&tcp_nat_from, &tcp_nat_to, &udp_nat_from, &udp_nat_to, &nat_from, &nat_to);
+	port = mi->port;
+	time_added = mi->time_added;
+	hi = mi->host;
+	ecm_ip_addr_to_string(address, hi->address);
+
+
+	result = ecm_state_prefix_add(sfi, "mapping");
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "port", "%d", port);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "from", "%d", from);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "to", "%d", to);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "tcp_from", "%d", tcp_from);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "tcp_to", "%d", tcp_to);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "udp_from", "%d", udp_from);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "udp_to", "%d", udp_to);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "nat_from", "%d", nat_from);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "nat_to", "%d", nat_to);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "tcp_nat_from", "%d", tcp_nat_from);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "tcp_nat_to", "%d", tcp_nat_to);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "udp_nat_from", "%d", udp_nat_from);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "udp_nat_to", "%d", udp_nat_to);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "address", "%s", address);
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "time_added", "%u", time_added);
+	if (result)
+		return result;
+
+
+	return ecm_state_prefix_remove(sfi);
+}
+EXPORT_SYMBOL(ecm_db_mapping_state_get);
+
+/*
+ * ecm_db_host_state_get()
+ *	Prepare a host message
+ */
+int ecm_db_host_state_get(struct ecm_state_file_instance *sfi, struct ecm_db_host_instance *hi)
+{
+	int result;
+	char address[50];
+#ifdef ECM_DB_XREF_ENABLE
+	int mapping_count;
+#endif
+	uint32_t time_added;
+	bool on_link;
+
+	DEBUG_TRACE("Prep host msg for %p\n", hi);
+
+	/*
+	 * Create a small xml stats element for our host.
+	 * Extract information from the host for inclusion into the message
+	 */
+#ifdef ECM_DB_XREF_ENABLE
+	mapping_count = ecm_db_host_mapping_count_get(hi);
+#endif
+	ecm_ip_addr_to_string(address, hi->address);
+	time_added = hi->time_added;
+	on_link = hi->on_link;
+
+
+	result = ecm_state_prefix_add(sfi, "host");
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "address", "%s", address);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "time_added", "%u", time_added);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "on_link", "%d", on_link);
+	if (result)
+		return result;
+
+#ifdef ECM_DB_XREF_ENABLE
+	result = ecm_state_write(sfi, "mappings", "%d", mapping_count);
+	if (result)
+		return result;
+#endif
+
+
+	return ecm_state_prefix_remove(sfi);
+}
+EXPORT_SYMBOL(ecm_db_host_state_get);
+
+/*
+ * ecm_db_node_state_get()
+ *	Prepare a node message
+ */
+int ecm_db_node_state_get(struct ecm_state_file_instance *sfi, struct ecm_db_node_instance *ni)
+{
+	int result;
+	char address[25];
+#ifdef ECM_DB_XREF_ENABLE
+	int from_connections_count;
+	int to_connections_count;
+	int from_nat_connections_count;
+	int to_nat_connections_count;
+#endif
+	uint32_t time_added;
+
+	DEBUG_TRACE("Prep node msg for %p\n", ni);
+
+	/*
+	 * Create a small xml stats block for our managed node, like:
+	 * <node address="" hosts="" time_added="" from_data_total="" to_data_total="" />
+	 *
+	 * Extract information from the node for inclusion into the message
+	 */
+#ifdef ECM_DB_XREF_ENABLE
+	spin_lock_bh(&ecm_db_lock);
+	from_connections_count = ni->from_connections_count;
+	to_connections_count = ni->to_connections_count;
+	from_nat_connections_count = ni->from_nat_connections_count;
+	to_nat_connections_count = ni->to_nat_connections_count;
+	spin_unlock_bh(&ecm_db_lock);
+#endif
+	time_added = ni->time_added;
+	sprintf(address, "%pM", ni->address);
+
+
+	result = ecm_state_prefix_add(sfi, "node");
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "address", "%s", address);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "time_added", "%u", time_added);
+	if (result)
+		return result;
+#ifdef ECM_DB_XREF_ENABLE
+	result = ecm_state_write(sfi, "from_connections_count", "%d", from_connections_count);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "to_connections_count", "%d", to_connections_count);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "from_nat_connections_count", "%d", from_nat_connections_count);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "to_nat_connections_count", "%d", to_nat_connections_count);
+	if (result)
+		return result;
+#endif
+#ifdef ECM_DB_ADVANCED_STATS_ENABLE
+	result = ecm_db_adv_stats_state_write(sfi, from_data_total, to_data_total,
+			from_packet_total, to_packet_total, from_data_total_dropped,
+			to_data_total_dropped, from_packet_total_dropped,
+			to_packet_total_dropped);
+	if (result)
+		return result;
+#endif
+	return ecm_state_prefix_remove(sfi);
+}
+EXPORT_SYMBOL(ecm_db_node_state_get);
+
+/*
+ * ecm_db_connection_hash_table_lengths_get()
+ *	Return hash table length
+ */
+int ecm_db_connection_hash_table_lengths_get(int index)
+{
+	int length;
+
+	DEBUG_ASSERT((index >= 0) && (index < ECM_DB_MAPPING_HASH_SLOTS), "Bad protocol: %d\n", index);
+	spin_lock_bh(&ecm_db_lock);
+	length = ecm_db_connection_table_lengths[index];
+	spin_unlock_bh(&ecm_db_lock);
+	return length;
+}
+EXPORT_SYMBOL(ecm_db_connection_hash_table_lengths_get);
+
+/*
+ * ecm_db_connection_hash_index_get_next()
+ * Given a hash index, return the next one OR return -1 for no more hash indicies to return.
+ */
+int ecm_db_connection_hash_index_get_next(int index)
+{
+	index++;
+	if (index >= ECM_DB_CONNECTION_SERIAL_HASH_SLOTS) {
+		return -1;
+	}
+	return index;
+}
+EXPORT_SYMBOL(ecm_db_connection_hash_index_get_next);
+
+/*
+ * ecm_db_connection_hash_index_get_first()
+ * Return first hash index
+ */
+int ecm_db_connection_hash_index_get_first(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(ecm_db_connection_hash_index_get_first);
+
+/*
+ * ecm_db_mapping_hash_table_lengths_get()
+ *	Return hash table length
+ */
+int ecm_db_mapping_hash_table_lengths_get(int index)
+{
+	int length;
+
+	DEBUG_ASSERT((index >= 0) && (index < ECM_DB_MAPPING_HASH_SLOTS), "Bad protocol: %d\n", index);
+	spin_lock_bh(&ecm_db_lock);
+	length = ecm_db_mapping_table_lengths[index];
+	spin_unlock_bh(&ecm_db_lock);
+	return length;
+}
+EXPORT_SYMBOL(ecm_db_mapping_hash_table_lengths_get);
+
+/*
+ * ecm_db_mapping_hash_index_get_next()
+ * Given a hash index, return the next one OR return -1 for no more hash indicies to return.
+ */
+int ecm_db_mapping_hash_index_get_next(int index)
+{
+	index++;
+	if (index >= ECM_DB_MAPPING_HASH_SLOTS) {
+		return -1;
+	}
+	return index;
+}
+EXPORT_SYMBOL(ecm_db_mapping_hash_index_get_next);
+
+/*
+ * ecm_db_mapping_hash_index_get_first()
+ * Return first hash index
+ */
+int ecm_db_mapping_hash_index_get_first(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(ecm_db_mapping_hash_index_get_first);
+
+/*
+ * ecm_db_host_hash_table_lengths_get()
+ *	Return hash table length
+ */
+int ecm_db_host_hash_table_lengths_get(int index)
+{
+	int length;
+
+	DEBUG_ASSERT((index >= 0) && (index < ECM_DB_HOST_HASH_SLOTS), "Bad protocol: %d\n", index);
+	spin_lock_bh(&ecm_db_lock);
+	length = ecm_db_host_table_lengths[index];
+	spin_unlock_bh(&ecm_db_lock);
+	return length;
+}
+EXPORT_SYMBOL(ecm_db_host_hash_table_lengths_get);
+
+/*
+ * ecm_db_host_hash_index_get_next()
+ * Given a hash index, return the next one OR return -1 for no more hash indicies to return.
+ */
+int ecm_db_host_hash_index_get_next(int index)
+{
+	index++;
+	if (index >= ECM_DB_HOST_HASH_SLOTS) {
+		return -1;
+	}
+	return index;
+}
+EXPORT_SYMBOL(ecm_db_host_hash_index_get_next);
+
+/*
+ * ecm_db_host_hash_index_get_first()
+ * Return first hash index
+ */
+int ecm_db_host_hash_index_get_first(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(ecm_db_host_hash_index_get_first);
+
+/*
+ * ecm_db_node_hash_table_lengths_get()
+ *	Return hash table length
+ */
+int ecm_db_node_hash_table_lengths_get(int index)
+{
+	int length;
+
+	DEBUG_ASSERT((index >= 0) && (index < ECM_DB_NODE_HASH_SLOTS), "Bad protocol: %d\n", index);
+	spin_lock_bh(&ecm_db_lock);
+	length = ecm_db_node_table_lengths[index];
+	spin_unlock_bh(&ecm_db_lock);
+	return length;
+}
+EXPORT_SYMBOL(ecm_db_node_hash_table_lengths_get);
+
+/*
+ * ecm_db_node_hash_index_get_next()
+ * Given a hash index, return the next one OR return -1 for no more hash indicies to return.
+ */
+int ecm_db_node_hash_index_get_next(int index)
+{
+	index++;
+	if (index >= ECM_DB_NODE_HASH_SLOTS) {
+		return -1;
+	}
+	return index;
+}
+EXPORT_SYMBOL(ecm_db_node_hash_index_get_next);
+
+/*
+ * ecm_db_node_hash_index_get_first()
+ * Return first hash index
+ */
+int ecm_db_node_hash_index_get_first(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(ecm_db_node_hash_index_get_first);
+
+/*
+ * ecm_db_iface_hash_table_lengths_get()
+ *	Return hash table length
+ */
+int ecm_db_iface_hash_table_lengths_get(int index)
+{
+	int length;
+
+	DEBUG_ASSERT((index >= 0) && (index < ECM_DB_IFACE_HASH_SLOTS), "Bad protocol: %d\n", index);
+	spin_lock_bh(&ecm_db_lock);
+	length = ecm_db_iface_table_lengths[index];
+	spin_unlock_bh(&ecm_db_lock);
+	return length;
+}
+EXPORT_SYMBOL(ecm_db_iface_hash_table_lengths_get);
+
+/*
+ * ecm_db_iface_hash_index_get_next()
+ * Given a hash index, return the next one OR return -1 for no more hash indicies to return.
+ */
+int ecm_db_iface_hash_index_get_next(int index)
+{
+	index++;
+	if (index >= ECM_DB_IFACE_HASH_SLOTS) {
+		return -1;
+	}
+	return index;
+}
+EXPORT_SYMBOL(ecm_db_iface_hash_index_get_next);
+
+/*
+ * ecm_db_iface_hash_index_get_first()
+ * Return first hash index
+ */
+int ecm_db_iface_hash_index_get_first(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(ecm_db_iface_hash_index_get_first);
+
+/*
+ * ecm_db_protocol_get_next()
+ * Given a number, return the next one OR return -1 for no more protocol numbers to return.
+ */
+int ecm_db_protocol_get_next(int protocol)
+{
+	protocol++;
+	if (protocol >= ECM_DB_PROTOCOL_COUNT) {
+		return -1;
+	}
+	return protocol;
+}
+EXPORT_SYMBOL(ecm_db_protocol_get_next);
+
+/*
+ * ecm_db_protocol_get_first()
+ * Return first protocol number
+ */
+int ecm_db_protocol_get_first(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(ecm_db_protocol_get_first);
+#endif
 
 /*
  * ecm_db_iface_add_ethernet()
@@ -5657,6 +6707,9 @@ void ecm_db_iface_add_ethernet(struct ecm_db_iface_instance *ii, uint8_t *addres
 	 * Record general info
 	 */
 	ii->type = ECM_DB_IFACE_TYPE_ETHERNET;
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	ii->state_get = ecm_db_iface_ethernet_state_get;
+#endif
 	ii->arg = arg;
 	ii->final = final;
 	strcpy(ii->name, name);
@@ -5755,6 +6808,9 @@ void ecm_db_iface_add_bridge(struct ecm_db_iface_instance *ii, uint8_t *address,
 	 * Record general info
 	 */
 	ii->type = ECM_DB_IFACE_TYPE_BRIDGE;
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	ii->state_get = ecm_db_iface_bridge_state_get;
+#endif
 	ii->arg = arg;
 	ii->final = final;
 	strcpy(ii->name, name);
@@ -5853,6 +6909,9 @@ void ecm_db_iface_add_unknown(struct ecm_db_iface_instance *ii, uint32_t os_spec
 	 * Record general info
 	 */
 	ii->type = ECM_DB_IFACE_TYPE_UNKNOWN;
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	ii->state_get = ecm_db_iface_unknown_state_get;
+#endif
 	ii->arg = arg;
 	ii->final = final;
 	strcpy(ii->name, name);
@@ -5949,6 +7008,9 @@ void ecm_db_iface_add_loopback(struct ecm_db_iface_instance *ii, uint32_t os_spe
 	 * Record general info
 	 */
 	ii->type = ECM_DB_IFACE_TYPE_LOOPBACK;
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	ii->state_get = ecm_db_iface_loopback_state_get;
+#endif
 	ii->arg = arg;
 	ii->final = final;
 	strcpy(ii->name, name);
@@ -6348,120 +7410,21 @@ uint32_t ecm_db_time_get(void)
 EXPORT_SYMBOL(ecm_db_time_get);
 
 /*
- * ecm_db_get_connection_count()
- */
-static ssize_t ecm_db_get_connection_count(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
-{
-	ssize_t count;
-	int num;
-
-	/*
-	 * Operate under our locks
-	 */
-	spin_lock_bh(&ecm_db_lock);
-	num = ecm_db_connection_count;
-	spin_unlock_bh(&ecm_db_lock);
-
-	count = snprintf(buf, (ssize_t)PAGE_SIZE, "%d\n", num);
-	return count;
-}
-
-/*
- * ecm_db_get_host_count()
- */
-static ssize_t ecm_db_get_host_count(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
-{
-	ssize_t count;
-	int num;
-
-	/*
-	 * Operate under our locks
-	 */
-	spin_lock_bh(&ecm_db_lock);
-	num = ecm_db_host_count;
-	spin_unlock_bh(&ecm_db_lock);
-
-	count = snprintf(buf, (ssize_t)PAGE_SIZE, "%d\n", num);
-	return count;
-}
-
-/*
- * ecm_db_get_mapping_count()
- */
-static ssize_t ecm_db_get_mapping_count(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
-{
-	ssize_t count;
-	int num;
-
-	/*
-	 * Operate under our locks
-	 */
-	spin_lock_bh(&ecm_db_lock);
-	num = ecm_db_mapping_count;
-	spin_unlock_bh(&ecm_db_lock);
-
-	count = snprintf(buf, (ssize_t)PAGE_SIZE, "%d\n", num);
-	return count;
-}
-
-/*
- * ecm_db_get_node_count()
- */
-static ssize_t ecm_db_get_node_count(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
-{
-	ssize_t count;
-	int num;
-
-	/*
-	 * Operate under our locks
-	 */
-	spin_lock_bh(&ecm_db_lock);
-	num = ecm_db_node_count;
-	spin_unlock_bh(&ecm_db_lock);
-
-	count = snprintf(buf, (ssize_t)PAGE_SIZE, "%d\n", num);
-	return count;
-}
-
-/*
- * ecm_db_get_iface_count()
- */
-static ssize_t ecm_db_get_iface_count(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
-{
-	ssize_t count;
-	int num;
-
-	/*
-	 * Operate under our locks
-	 */
-	spin_lock_bh(&ecm_db_lock);
-	num = ecm_db_iface_count;
-	spin_unlock_bh(&ecm_db_lock);
-
-	count = snprintf(buf, (ssize_t)PAGE_SIZE, "%d\n", num);
-	return count;
-}
-
-/*
  * ecm_db_get_defunct_all()
  *	Reading this file returns the accumulated total of all objects
  */
-static ssize_t ecm_db_get_defunct_all(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
+static ssize_t ecm_db_get_defunct_all(struct file *file,
+					char __user *user_buf,
+					size_t sz, loff_t *ppos)
 {
-	ssize_t count;
+	int ret;
 	int num;
+	char *buf;
+
+	buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!buf) {
+		return -ENOMEM;
+	}
 
 	/*
 	 * Operate under our locks
@@ -6471,34 +7434,55 @@ static ssize_t ecm_db_get_defunct_all(struct device *dev,
 			+ ecm_db_node_count + ecm_db_iface_count;
 	spin_unlock_bh(&ecm_db_lock);
 
-	count = snprintf(buf, (ssize_t)PAGE_SIZE, "%d\n", num);
-	return count;
+	ret = snprintf(buf, (ssize_t)PAGE_SIZE, "%d\n", num);
+	if (ret < 0) {
+		kfree(buf);
+		return ret;
+	}
+
+	ret = simple_read_from_buffer(user_buf, sz, ppos, buf, ret);
+	kfree(buf);
+	return ret;
 }
 
 /*
  * ecm_db_set_defunct_all()
  */
-static ssize_t ecm_db_set_defunct_all(struct device *dev,
-				  struct device_attribute *attr,
-				  const char *buf, size_t count)
+static ssize_t ecm_db_set_defunct_all(struct file *file,
+					const char __user *user_buf,
+					size_t sz, loff_t *ppos)
 {
 	ecm_db_connection_defunct_all();
-	return count;
+	return sz;
 }
+
+/*
+ * File operations for defunct_all.
+ */
+static struct file_operations ecm_db_defunct_all_fops = {
+	.read = ecm_db_get_defunct_all,
+	.write = ecm_db_set_defunct_all,
+};
 
 /*
  * ecm_db_get_connection_counts_simple()
  *	Return total of connections for each simple protocol (tcp, udp, other).  Primarily for use by the luci-bwc service.
  */
-static ssize_t ecm_db_get_connection_counts_simple(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
+static ssize_t ecm_db_get_connection_counts_simple(struct file *file,
+						char __user *user_buf,
+						size_t sz, loff_t *ppos)
 {
 	int tcp_count;
 	int udp_count;
 	int other_count;
 	int total_count;
-	ssize_t count;
+	int ret;
+	char *buf;
+
+	buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!buf) {
+		return -ENOMEM;
+	}
 
 	/*
 	 * Get snapshot of the protocol counts
@@ -6510,52 +7494,23 @@ static ssize_t ecm_db_get_connection_counts_simple(struct device *dev,
 	other_count = total_count - (tcp_count + udp_count);
 	spin_unlock_bh(&ecm_db_lock);
 
-	count = snprintf(buf, (ssize_t)PAGE_SIZE, "tcp %d udp %d other %d total %d\n", tcp_count, udp_count, other_count, total_count);
-	return count;
+	ret = snprintf(buf, (ssize_t)PAGE_SIZE, "tcp %d udp %d other %d total %d\n", tcp_count, udp_count, other_count, total_count);
+	if (ret < 0) {
+		kfree(buf);
+		return -EFAULT;
+	}
+
+	ret = simple_read_from_buffer(user_buf, sz, ppos, buf, ret);
+	kfree(buf);
+	return ret;
 }
 
-
 /*
- * SysFS attributes for the default classifier itself.
+ * File operations for simple connection counts.
  */
-static DEVICE_ATTR(connection_count, 0444, ecm_db_get_connection_count, NULL);
-static DEVICE_ATTR(host_count, 0444, ecm_db_get_host_count, NULL);
-static DEVICE_ATTR(mapping_count, 0444, ecm_db_get_mapping_count, NULL);
-static DEVICE_ATTR(node_count, 0444, ecm_db_get_node_count, NULL);
-static DEVICE_ATTR(iface_count, 0444, ecm_db_get_iface_count, NULL);
-static DEVICE_ATTR(defunct_all, 0644, ecm_db_get_defunct_all, ecm_db_set_defunct_all);
-static DEVICE_ATTR(connection_counts_simple, 0444, ecm_db_get_connection_counts_simple, NULL);
-
-/*
- * System device attribute array.
- */
-static struct device_attribute *ecm_db_attrs[] = {
-	&dev_attr_connection_count,
-	&dev_attr_host_count,
-	&dev_attr_mapping_count,
-	&dev_attr_node_count,
-	&dev_attr_iface_count,
-	&dev_attr_defunct_all,
-	&dev_attr_connection_counts_simple,
+static struct file_operations ecm_db_connection_count_simple_fops = {
+	.read = ecm_db_get_connection_counts_simple,
 };
-
-/*
- * Sub system node of the ECM default classifier
- * Sys device control points can be found at /sys/devices/system/ecm_db/ecm_dbX/
- */
-static struct bus_type ecm_db_subsys = {
-	.name = "ecm_db",
-	.dev_name = "ecm_db",
-};
-
-/*
- * ecm_db_dev_release()
- *	This is a dummy release function for device.
- */
-static void ecm_db_dev_release(struct device *dev)
-{
-
-}
 
 /*
  * ecm_db_timer_callback()
@@ -6855,16 +7810,15 @@ void ecm_db_traverse_node_to_nat_connection_list_and_decelerate(struct ecm_db_no
 /*
  * ecm_db_init()
  */
-int ecm_db_init(void)
+int ecm_db_init(struct dentry *dentry)
 {
-	int result;
-	int i;
 	DEBUG_INFO("ECM Module init\n");
 
-	/*
-	 * Initialise our global database lock
-	 */
-	spin_lock_init(&ecm_db_lock);
+	ecm_db_dentry = debugfs_create_dir("ecm_db", dentry);
+	if (!ecm_db_dentry) {
+		DEBUG_ERROR("Failed to create ecm db directory in debugfs\n");
+		return -1;
+	}
 
 	/*
 	 * Get a random seed for jhash()
@@ -6872,37 +7826,46 @@ int ecm_db_init(void)
 	get_random_bytes(&ecm_db_jhash_rnd, sizeof(ecm_db_jhash_rnd));
 	DEBUG_INFO("jhash random seed: %u\n", ecm_db_jhash_rnd);
 
-	/*
-	 * Register System device control
-	 */
-	result = subsys_system_register(&ecm_db_subsys, NULL);
-	if (result) {
-		DEBUG_ERROR("Failed to register SysFS class %d\n", result);
-		return result;
+	if (!debugfs_create_u32("connection_count", S_IRUGO, ecm_db_dentry,
+					(u32 *)&ecm_db_connection_count)) {
+		DEBUG_ERROR("Failed to create ecm db connection count file in debugfs\n");
+		goto init_cleanup;
 	}
 
-	/*
-	 * Register SYSFS device control
-	 */
-	memset(&ecm_db_dev, 0, sizeof(ecm_db_dev));
-	ecm_db_dev.id = 0;
-	ecm_db_dev.bus = &ecm_db_subsys;
-	ecm_db_dev.release = ecm_db_dev_release;
-	result = device_register(&ecm_db_dev);
-	if (result) {
-		DEBUG_ERROR("Failed to register System device %d\n", result);
-		goto task_cleanup_1;
+	if (!debugfs_create_u32("host_count", S_IRUGO, ecm_db_dentry,
+					(u32 *)&ecm_db_host_count)) {
+		DEBUG_ERROR("Failed to create ecm db host count file in debugfs\n");
+		goto init_cleanup;
 	}
 
-	/*
-	 * Create files, one for each parameter supported by this module
-	 */
-	for (i = 0; i < ARRAY_SIZE(ecm_db_attrs); i++) {
-		result = device_create_file(&ecm_db_dev, ecm_db_attrs[i]);
-		if (result) {
-			DEBUG_ERROR("Failed to create attribute file %d\n", result);
-			goto task_cleanup_2;
-		}
+	if (!debugfs_create_u32("mapping_count", S_IRUGO, ecm_db_dentry,
+					(u32 *)&ecm_db_mapping_count)) {
+		DEBUG_ERROR("Failed to create ecm db mapping count file in debugfs\n");
+		goto init_cleanup;
+	}
+
+	if (!debugfs_create_u32("node_count", S_IRUGO, ecm_db_dentry,
+					(u32 *)&ecm_db_node_count)) {
+		DEBUG_ERROR("Failed to create ecm db node count file in debugfs\n");
+		goto init_cleanup;
+	}
+
+	if (!debugfs_create_u32("iface_count", S_IRUGO, ecm_db_dentry,
+					(u32 *)&ecm_db_iface_count)) {
+		DEBUG_ERROR("Failed to create ecm db iface count file in debugfs\n");
+		goto init_cleanup;
+	}
+
+	if (!debugfs_create_file("defunct_all", S_IRUGO | S_IWUSR, ecm_db_dentry,
+					NULL, &ecm_db_defunct_all_fops)) {
+		DEBUG_ERROR("Failed to create ecm db defunct_all file in debugfs\n");
+		goto init_cleanup;
+	}
+
+	if (!debugfs_create_file("connection_count_simple", S_IRUGO, ecm_db_dentry,
+					NULL, &ecm_db_connection_count_simple_fops)) {
+		DEBUG_ERROR("Failed to create ecm db connection count simple file in debugfs\n");
+		goto init_cleanup;
 	}
 
 	/*
@@ -6979,18 +7942,12 @@ int ecm_db_init(void)
 	 */
 	memset(ecm_db_connection_count_by_protocol, 0, sizeof(ecm_db_connection_count_by_protocol));
 
-
 	return 0;
 
-task_cleanup_2:
-	while (--i >= 0) {
-		device_remove_file(&ecm_db_dev, ecm_db_attrs[i]);
-	}
-	device_unregister(&ecm_db_dev);
-task_cleanup_1:
-	bus_unregister(&ecm_db_subsys);
+init_cleanup:
 
-	return result;
+	debugfs_remove_recursive(ecm_db_dentry);
+	return -1;
 }
 EXPORT_SYMBOL(ecm_db_init);
 
@@ -6999,7 +7956,6 @@ EXPORT_SYMBOL(ecm_db_init);
  */
 void ecm_db_exit(void)
 {
-	int i;
 	DEBUG_INFO("ECM DB Module exit\n");
 
 	spin_lock_bh(&ecm_db_lock);
@@ -7017,11 +7973,11 @@ void ecm_db_exit(void)
 	 */
 	del_timer_sync(&ecm_db_timer);
 
-	for (i = 0; i < ARRAY_SIZE(ecm_db_attrs); i++) {
-		device_remove_file(&ecm_db_dev, ecm_db_attrs[i]);
+	/*
+	 * Remove the debugfs files recursively.
+	 */
+	if (ecm_db_dentry) {
+		debugfs_remove_recursive(ecm_db_dentry);
 	}
-
-	device_unregister(&ecm_db_dev);
-	bus_unregister(&ecm_db_subsys);
 }
 EXPORT_SYMBOL(ecm_db_exit);

@@ -1,6 +1,6 @@
 /*
  **************************************************************************
- * Copyright (c) 2014,2015 The Linux Foundation.  All rights reserved.
+ * Copyright (c) 2014-2015 The Linux Foundation.  All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -105,6 +105,10 @@ typedef void (*ecm_classifier_reclassify_callback_t)(struct ecm_classifier_insta
 											/* Reclassify */
 typedef void (*ecm_classifier_last_process_response_get_callback_t)(struct ecm_classifier_instance *ci, struct ecm_classifier_process_response *process_response);
 											/* Get last process response */
+#ifdef ECM_STATE_OUTPUT_ENABLE
+typedef int (*ecm_classifier_state_get_callback_t)(struct ecm_classifier_instance *ci, struct ecm_state_file_instance *sfi);
+											/* Get state output.  Returns 0 upon success. */
+#endif
 
 /*
  * Base class for all types of classifiers
@@ -127,10 +131,88 @@ struct ecm_classifier_instance {
 							/* Reclassify */
 	ecm_classifier_last_process_response_get_callback_t last_process_response_get;
 							/* Return last process response */
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	ecm_classifier_state_get_callback_t state_get;
+							/* Return its state */
+#endif
 	ecm_classifier_ref_method_t ref;
 	ecm_classifier_deref_callback_t deref;
 };
 
+#ifdef ECM_STATE_OUTPUT_ENABLE
+/*
+ * ecm_classifier_process_response_state_get()
+ *	Output detail for the process response
+ *
+ * Returns 0 on success.
+ */
+static inline int ecm_classifier_process_response_state_get(struct ecm_state_file_instance *sfi, struct ecm_classifier_process_response *pr)
+{
+	int result;
+
+	result = ecm_state_prefix_add(sfi, "pr");
+	if (result)
+		return result;
+
+	if (pr->relevance == ECM_CLASSIFIER_RELEVANCE_NO) {
+		return ecm_state_write(sfi, "relevant", "%s", "no");
+	}
+
+	if (pr->process_actions & ECM_CLASSIFIER_PROCESS_ACTION_DROP) {
+		if (pr->drop) {
+			result = ecm_state_write(sfi, "drop", "yes");
+			if (result)
+				return result;
+		} else {
+			result = ecm_state_write(sfi, "drop", "no");
+			if (result)
+				return result;
+		}
+	}
+
+	if (pr->relevance == ECM_CLASSIFIER_RELEVANCE_MAYBE) {
+		result = ecm_state_write(sfi, "accel", "denied");
+		if (result)
+			return result;
+
+		result = ecm_state_write(sfi, "relevant", "maybe");
+			if (result)
+				return result;
+	} else {
+		result = ecm_state_write(sfi, "relevant", "yes");
+		if (result)
+			return result;
+		if (pr->process_actions & ECM_CLASSIFIER_PROCESS_ACTION_ACCEL_MODE) {
+			if (pr->accel_mode == ECM_CLASSIFIER_ACCELERATION_MODE_ACCEL) {
+				result = ecm_state_write(sfi, "accel", "wanted");
+				if (result)
+					return result;
+			}	else if (pr->accel_mode == ECM_CLASSIFIER_ACCELERATION_MODE_NO) {
+				result = ecm_state_write(sfi, "accel", "denied");
+				if (result)
+					return result;
+			/* Else don't care */
+			}
+		}
+	}
+
+	if (pr->process_actions & ECM_CLASSIFIER_PROCESS_ACTION_QOS_TAG) {
+		result = ecm_state_write(sfi, "flow_qos_tag", "%u", pr->flow_qos_tag);
+		if (result)
+			return result;
+		result = ecm_state_write(sfi, "return_qos_tag", "%u", pr->return_qos_tag);
+		if (result)
+			return result;
+	}
+	if (pr->process_actions & ECM_CLASSIFIER_PROCESS_ACTION_TIMER_GROUP) {
+		result = ecm_state_write(sfi, "timer_group", "%d", pr->timer_group);
+		if (result)
+			return result;
+	}
+
+	return ecm_state_prefix_remove(sfi);
+}
+#endif
 
 
 

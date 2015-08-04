@@ -1,6 +1,6 @@
 /*
  **************************************************************************
- * Copyright (c) 2014,2015 The Linux Foundation.  All rights reserved.
+ * Copyright (c) 2014-2015 The Linux Foundation.  All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -21,10 +21,7 @@
 #include <linux/module.h>
 #include <linux/skbuff.h>
 #include <linux/icmp.h>
-#include <linux/sysctl.h>
 #include <linux/kthread.h>
-#include <linux/device.h>
-#include <linux/fs.h>
 #include <linux/pkt_sched.h>
 #include <linux/string.h>
 #include <net/ip6_route.h>
@@ -53,7 +50,6 @@
 #include <linux/if_arp.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/netfilter_bridge.h>
-#include <linux/if_bridge.h>
 #include <net/arp.h>
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_acct.h>
@@ -79,6 +75,7 @@
 
 #include "ecm_types.h"
 #include "ecm_db_types.h"
+#include "ecm_state.h"
 #include "ecm_tracker.h"
 #include "ecm_classifier.h"
 #include "ecm_front_end_types.h"
@@ -92,17 +89,7 @@
 /*
  * Locking - concurrency control
  */
-static spinlock_t ecm_interface_lock;			/* Protect against SMP access between netfilter, events and private threaded function. */
-
-/*
- * System device linkage
- */
-static struct device ecm_interface_dev;		/* System device linkage */
-
-/*
- * General operational control
- */
-static int ecm_interface_stopped = 0;			/* When non-zero further traffic will not be processed */
+static DEFINE_SPINLOCK(ecm_interface_lock);			/* Protect against SMP access between netfilter, events and private threaded function. */
 
 /*
  * Management thread control
@@ -1450,89 +1437,6 @@ static struct notifier_block ecm_interface_netdev_notifier __read_mostly = {
 	.notifier_call		= ecm_interface_netdev_notifier_callback,
 };
 
-/*
- * ecm_interface_get_stop()
- */
-static ssize_t ecm_interface_get_stop(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
-{
-	ssize_t count;
-	int num;
-
-	/*
-	 * Operate under our locks
-	 */
-	spin_lock_bh(&ecm_interface_lock);
-	num = ecm_interface_stopped;
-	spin_unlock_bh(&ecm_interface_lock);
-
-	count = snprintf(buf, (ssize_t)PAGE_SIZE, "%d\n", num);
-	return count;
-}
-
-void ecm_interface_stop(int num)
-{
-	/*
-	 * Operate under our locks and stop further processing of packets
-	 */
-	spin_lock_bh(&ecm_interface_lock);
-	ecm_interface_stopped = num;
-	spin_unlock_bh(&ecm_interface_lock);
-
-}
-EXPORT_SYMBOL(ecm_interface_stop);
-
-
-/*
- * ecm_interface_set_stop()
- */
-static ssize_t ecm_interface_set_stop(struct device *dev,
-				  struct device_attribute *attr,
-				  const char *buf, size_t count)
-{
-	char num_buf[12];
-	int num;
-
-	/*
-	 * Get the number from buf into a properly z-termed number buffer
-	 */
-	if (count > 11) {
-		return 0;
-	}
-	memcpy(num_buf, buf, count);
-	num_buf[count] = '\0';
-	sscanf(num_buf, "%d", &num);
-	DEBUG_TRACE("ecm_interface_stop = %d\n", num);
-
-	ecm_interface_stop(num);
-
-	return count;
-}
-
-/*
- * System device attributes for the ECM interface.
- */
-static DEVICE_ATTR(stop, 0644, ecm_interface_get_stop, ecm_interface_set_stop);
-
-/*
- * Sub system node.
- * Sys device control points can be found at /sys/devices/system/ecm_interface/ecm_interfaceX/
- */
-static struct bus_type ecm_interface_subsys = {
-	.name = "ecm_interface",
-	.dev_name = "ecm_interface",
-};
-
-/*
- * ecm_interface_dev_release()
- *	This is a dummy release function for device.
- */
-static void ecm_interface_dev_release(struct device *dev)
-{
-
-}
-
 #if defined(ECM_DB_XREF_ENABLE) && defined(ECM_BAND_STEERING_ENABLE)
 /*
  * ecm_interfae_node_br_fdb_notify_event()
@@ -1583,46 +1487,10 @@ int ecm_interface_init(void)
 	int result;
 	DEBUG_INFO("ECM Interface init\n");
 
-	/*
-	 * Initialise our global lock
-	 */
-	spin_lock_init(&ecm_interface_lock);
-
-	/*
-	 * Register the sub system
-	 */
-	result = subsys_system_register(&ecm_interface_subsys, NULL);
-	if (result) {
-		DEBUG_ERROR("Failed to register sub system %d\n", result);
-		return result;
-	}
-
-	/*
-	 * Register system device control
-	 */
-	memset(&ecm_interface_dev, 0, sizeof(ecm_interface_dev));
-	ecm_interface_dev.id = 0;
-	ecm_interface_dev.bus = &ecm_interface_subsys;
-	ecm_interface_dev.release = &ecm_interface_dev_release;
-	result = device_register(&ecm_interface_dev);
-	if (result) {
-		DEBUG_ERROR("Failed to register system device %d\n", result);
-		goto task_cleanup_1;
-	}
-
-	/*
-	 * Create files, one for each parameter supported by this module
-	 */
-	result = device_create_file(&ecm_interface_dev, &dev_attr_stop);
-	if (result) {
-		DEBUG_ERROR("Failed to register stop file %d\n", result);
-		goto task_cleanup_2;
-	}
-
 	result = register_netdevice_notifier(&ecm_interface_netdev_notifier);
 	if (result != 0) {
 		DEBUG_ERROR("Failed to register netdevice notifier %d\n", result);
-		goto task_cleanup_2;
+		return result;
 	}
 #if defined(ECM_DB_XREF_ENABLE) && defined(ECM_BAND_STEERING_ENABLE)
 	/*
@@ -1631,13 +1499,6 @@ int ecm_interface_init(void)
 	br_fdb_update_register_notify(&ecm_interface_node_br_fdb_update_nb);
 #endif
 	return 0;
-
-task_cleanup_2:
-	device_unregister(&ecm_interface_dev);
-task_cleanup_1:
-	bus_unregister(&ecm_interface_subsys);
-
-	return result;
 }
 EXPORT_SYMBOL(ecm_interface_init);
 
@@ -1654,9 +1515,6 @@ void ecm_interface_exit(void)
 
 	unregister_netdevice_notifier(&ecm_interface_netdev_notifier);
 
-	device_remove_file(&ecm_interface_dev, &dev_attr_stop);
-	device_unregister(&ecm_interface_dev);
-	bus_unregister(&ecm_interface_subsys);
 #if defined(ECM_DB_XREF_ENABLE) && defined(ECM_BAND_STEERING_ENABLE)
 	/*
 	 * unregister for bridge fdb update events

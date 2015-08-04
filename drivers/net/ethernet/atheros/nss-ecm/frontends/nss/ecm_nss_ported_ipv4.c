@@ -1,6 +1,6 @@
 /*
  **************************************************************************
- * Copyright (c) 2014,2015 The Linux Foundation.  All rights reserved.
+ * Copyright (c) 2014-2015 The Linux Foundation.  All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -21,11 +21,9 @@
 #include <linux/module.h>
 #include <linux/skbuff.h>
 #include <linux/icmp.h>
-#include <linux/sysctl.h>
 #include <linux/kthread.h>
-#include <linux/device.h>
-#include <linux/fs.h>
 #include <linux/pkt_sched.h>
+#include <linux/debugfs.h>
 #include <linux/string.h>
 #include <net/route.h>
 #include <net/ip.h>
@@ -68,6 +66,7 @@
 
 #include "ecm_types.h"
 #include "ecm_db_types.h"
+#include "ecm_state.h"
 #include "ecm_tracker.h"
 #include "ecm_classifier.h"
 #include "ecm_front_end_types.h"
@@ -1348,6 +1347,74 @@ static int ecm_nss_ported_ipv4_connection_deref(struct ecm_front_end_connection_
 	return 0;
 }
 
+#ifdef ECM_STATE_OUTPUT_ENABLE
+/*
+ * ecm_nss_ported_ipv4_connection_state_get()
+ *	Return state of this ported front end instance
+ */
+static int ecm_nss_ported_ipv4_connection_state_get(struct ecm_front_end_connection_instance *feci, struct ecm_state_file_instance *sfi)
+{
+	int result;
+	bool can_accel;
+	ecm_front_end_acceleration_mode_t accel_mode;
+	struct ecm_front_end_connection_mode_stats stats;
+	struct ecm_nss_ported_ipv4_connection_instance *npci = (struct ecm_nss_ported_ipv4_connection_instance *)feci;
+
+	DEBUG_CHECK_MAGIC(npci, ECM_NSS_PORTED_IPV4_CONNECTION_INSTANCE_MAGIC, "%p: magic failed", npci);
+
+	spin_lock_bh(&feci->lock);
+	can_accel = feci->can_accel;
+	accel_mode = feci->accel_mode;
+	memcpy(&stats, &feci->stats, sizeof(struct ecm_front_end_connection_mode_stats));
+	spin_unlock_bh(&feci->lock);
+
+	result = ecm_state_prefix_add(sfi, "front_end_v4.ported");
+	if (result)
+		return result;
+
+	result = ecm_state_write(sfi, "can_accel", "%d", can_accel);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "accel_mode", "%d", accel_mode);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "decelerate_pending", "%d", stats.decelerate_pending);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "flush_happened_total", "%d", stats.flush_happened_total);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "no_action_seen_total", "%d", stats.no_action_seen_total);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "no_action_seen", "%d", stats.no_action_seen);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "no_action_seen_limit", "%d", stats.no_action_seen_limit);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "driver_fail_total", "%d", stats.driver_fail_total);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "driver_fail", "%d", stats.driver_fail);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "driver_fail_limit", "%d", stats.driver_fail_limit);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "nss_nack_total", "%d", stats.nss_nack_total);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "nss_nack", "%d", stats.nss_nack);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "nss_nack_limit", "%d", stats.nss_nack_limit);
+	if (result)
+		return result;
+
+ 	return ecm_state_prefix_remove(sfi);
+}
+#endif
 
 /*
  * ecm_nss_ported_ipv4_connection_instance_alloc()
@@ -1399,6 +1466,9 @@ static struct ecm_nss_ported_ipv4_connection_instance *ecm_nss_ported_ipv4_conne
 	feci->accel_state_get = ecm_nss_ported_ipv4_connection_accel_state_get;
 	feci->action_seen = ecm_nss_ported_ipv4_connection_action_seen;
 	feci->accel_ceased = ecm_nss_ported_ipv4_connection_accel_ceased;
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	feci->state_get = ecm_nss_ported_ipv4_connection_state_get;
+#endif
 
 	if (protocol == IPPROTO_TCP) {
 		npci->ported_accelerated_count_index = ECM_NSS_PORTED_IPV4_PROTO_TCP;
@@ -2124,43 +2194,26 @@ unsigned int ecm_nss_ported_ipv4_process(struct net_device *out_dev, struct net_
 }
 
 /*
- * ecm_nss_ported_ipv4_get_tcp_accelerated_count()
+ * ecm_nss_ported_ipv4_debugfs_init()
  */
-ssize_t ecm_nss_ported_ipv4_get_tcp_accelerated_count(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
+bool ecm_nss_ported_ipv4_debugfs_init(struct dentry *dentry)
 {
-	ssize_t count;
-	int num;
+	struct dentry *udp_dentry;
 
-	/*
-	 * Operate under our locks
-	 */
-	spin_lock_bh(&ecm_nss_ipv4_lock);
-	num = ecm_nss_ported_ipv4_accelerated_count[ECM_NSS_PORTED_IPV4_PROTO_TCP];
-	spin_unlock_bh(&ecm_nss_ipv4_lock);
+	udp_dentry = debugfs_create_u32("udp_accelerated_count", S_IRUGO, dentry,
+						&ecm_nss_ported_ipv4_accelerated_count[ECM_NSS_PORTED_IPV4_PROTO_UDP]);
+	if (!udp_dentry) {
+		DEBUG_ERROR("Failed to create ecm nss ipv4 udp_accelerated_count file in debugfs\n");
+		return false;
+	}
 
-	count = snprintf(buf, (ssize_t)PAGE_SIZE, "%d\n", num);
-	return count;
+	if (!debugfs_create_u32("tcp_accelerated_count", S_IRUGO, dentry,
+					&ecm_nss_ported_ipv4_accelerated_count[ECM_NSS_PORTED_IPV4_PROTO_TCP])) {
+		DEBUG_ERROR("Failed to create ecm nss ipv4 tcp_accelerated_count file in debugfs\n");
+		debugfs_remove(udp_dentry);
+		return false;
+	}
+
+	return true;
 }
 
-/*
- * ecm_nss_ported_ipv4_get_udp_accelerated_count()
- */
-ssize_t ecm_nss_ported_ipv4_get_udp_accelerated_count(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
-{
-	ssize_t count;
-	int num;
-
-	/*
-	 * Operate under our locks
-	 */
-	spin_lock_bh(&ecm_nss_ipv4_lock);
-	num = ecm_nss_ported_ipv4_accelerated_count[ECM_NSS_PORTED_IPV4_PROTO_UDP];
-	spin_unlock_bh(&ecm_nss_ipv4_lock);
-
-	count = snprintf(buf, (ssize_t)PAGE_SIZE, "%d\n", num);
-	return count;
-}

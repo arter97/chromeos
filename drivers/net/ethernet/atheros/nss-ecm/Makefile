@@ -31,6 +31,13 @@ ecm-y := \
 	 ecm_interface.o \
 	 ecm_init.o
 
+##############################################################################
+# Define ECM_STATE_OUTPUT_ENABLE=y to support XML state output
+#############################################################################
+ECM_STATE_OUTPUT_ENABLE=y
+ecm-$(ECM_STATE_OUTPUT_ENABLE) += ecm_state.o
+ccflags-$(ECM_STATE_OUTPUT_ENABLE) += -DECM_STATE_OUTPUT_ENABLE
+
 ccflags-y += -DECM_CLASSIFIER_DEFAULT_DEBUG_LEVEL=1
 ccflags-y += -DECM_DB_DEBUG_LEVEL=1
 ccflags-y += -DECM_FRONT_END_IPV4_DEBUG_LEVEL=1

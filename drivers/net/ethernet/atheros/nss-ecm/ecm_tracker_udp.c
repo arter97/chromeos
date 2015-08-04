@@ -1,6 +1,6 @@
 /*
  **************************************************************************
- * Copyright (c) 2014, 2015, The Linux Foundation.  All rights reserved.
+ * Copyright (c) 2014-2015, The Linux Foundation.  All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -60,6 +60,7 @@
 
 #include "ecm_types.h"
 #include "ecm_db_types.h"
+#include "ecm_state.h"
 #include "ecm_tracker.h"
 #include "ecm_tracker_udp.h"
 
@@ -95,7 +96,7 @@ struct ecm_tracker_udp_internal_instance {
 };
 
 int ecm_tracker_udp_count = 0;		/* Counts the number of UDP data trackers right now */
-spinlock_t ecm_tracker_udp_lock;		/* Global lock for the tracker globals */
+static DEFINE_SPINLOCK(ecm_tracker_udp_lock);		/* Global lock for the tracker globals */
 
 /*
  * ecm_trracker_udp_connection_state_matrix[][]
@@ -237,6 +238,52 @@ static void ecm_tracker_udp_state_get_callback(struct ecm_tracker_instance *ti, 
 	*state = ecm_tracker_udp_connection_state_matrix[*src_state][*dest_state];
 }
 
+#ifdef ECM_STATE_OUTPUT_ENABLE
+/*
+ * ecm_tracker_udp_state_text_get_callback()
+ *	Return state
+ */
+static int ecm_tracker_udp_state_text_get_callback(struct ecm_tracker_instance *ti, struct ecm_state_file_instance *sfi)
+{
+	int result;
+	struct ecm_tracker_udp_internal_instance *utii = (struct ecm_tracker_udp_internal_instance *)ti;
+	ecm_db_timer_group_t timer_group;
+	ecm_tracker_sender_state_t sender_state[ECM_TRACKER_SENDER_MAX];
+	ecm_tracker_connection_state_t connection_state;
+	DEBUG_CHECK_MAGIC(utii, ECM_TRACKER_UDP_INSTANCE_MAGIC, "%p: magic failed", utii);
+
+	result = ecm_state_prefix_add(sfi, "tracker_udp");
+	if (result)
+		return result;
+
+	/*
+	 * Capture state
+	 */
+	spin_lock_bh(&utii->lock);
+	sender_state[ECM_TRACKER_SENDER_TYPE_SRC] = utii->sender_state[ECM_TRACKER_SENDER_TYPE_SRC];
+	sender_state[ECM_TRACKER_SENDER_TYPE_DEST] = utii->sender_state[ECM_TRACKER_SENDER_TYPE_DEST];
+	timer_group = utii->timer_group;
+	spin_unlock_bh(&utii->lock);
+	connection_state = ecm_tracker_udp_connection_state_matrix[sender_state[ECM_TRACKER_SENDER_TYPE_SRC]][sender_state[ECM_TRACKER_SENDER_TYPE_DEST]];
+
+
+	connection_state = ecm_tracker_udp_connection_state_matrix[sender_state[ECM_TRACKER_SENDER_TYPE_SRC]][sender_state[ECM_TRACKER_SENDER_TYPE_DEST]];
+	result = ecm_state_write(sfi, "timer_group", "%d", ECM_DB_TIMER_GROUPS_CONNECTION_GENERIC_TIMEOUT);
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "src_sender_state", "%s", ecm_tracker_sender_state_to_string(sender_state[ECM_TRACKER_SENDER_TYPE_SRC]));
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "dest_sender_state", "%s", ecm_tracker_sender_state_to_string(sender_state[ECM_TRACKER_SENDER_TYPE_DEST]));
+	if (result)
+		return result;
+	result = ecm_state_write(sfi, "connection_state", "%s", ecm_tracker_connection_state_to_string(connection_state));
+	if (result)
+		return result;
+
+ 	return ecm_state_prefix_remove(sfi);
+}
+#endif
 
 /*
  * ecm_tracker_udp_init()
@@ -281,6 +328,9 @@ struct ecm_tracker_udp_instance *ecm_tracker_udp_alloc(void)
 	utii->udp_base.base.deref = ecm_tracker_udp_deref_callback;
 	utii->udp_base.base.state_update = ecm_tracker_udp_state_update_callback;
 	utii->udp_base.base.state_get = ecm_tracker_udp_state_get_callback;
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	utii->udp_base.base.state_text_get = ecm_tracker_udp_state_text_get_callback;
+#endif
 
 	spin_lock_init(&utii->lock);
 
@@ -296,23 +346,3 @@ struct ecm_tracker_udp_instance *ecm_tracker_udp_alloc(void)
 	return (struct ecm_tracker_udp_instance *)utii;
 }
 EXPORT_SYMBOL(ecm_tracker_udp_alloc);
-
-/*
- * ecm_tracker_udp_module_init()
- */
-int ecm_tracker_udp_module_init(void)
-{
-	DEBUG_INFO("UDP Tracker Module init\n");
-	spin_lock_init(&ecm_tracker_udp_lock);
-	return 0;
-}
-EXPORT_SYMBOL(ecm_tracker_udp_module_init);
-
-/*
- * ecm_tracker_udp_module_exit()
- */
-void ecm_tracker_udp_module_exit(void)
-{
-	DEBUG_INFO("UDP Tracker Module exit\n");
-}
-EXPORT_SYMBOL(ecm_tracker_udp_module_exit);

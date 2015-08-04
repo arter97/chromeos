@@ -1,6 +1,6 @@
 /*
  **************************************************************************
- * Copyright (c) 2014, 2015, The Linux Foundation.  All rights reserved.
+ * Copyright (c) 2014-2015, The Linux Foundation.  All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -75,8 +75,7 @@ typedef enum ecm_tracker_connection_states ecm_tracker_connection_state_t;
  * ecm_tracker_connection_state_to_string
  *	Convert a connection state to a string
  */
-const char *
-ecm_tracker_connection_state_to_string(enum ecm_tracker_connection_states);
+const char *ecm_tracker_connection_state_to_string(enum ecm_tracker_connection_states);
 
 /*
  * enum ecm_tracker_ip_protocol_types
@@ -146,6 +145,13 @@ typedef void (*ecm_tracker_state_update_method_t)(struct ecm_tracker_instance *t
 													/* Update state of the sender */
 typedef void (*ecm_tracker_state_get_method_t)(struct ecm_tracker_instance *ti, ecm_tracker_sender_state_t *src_state, ecm_tracker_sender_state_t *dest_state, ecm_tracker_connection_state_t *state, ecm_db_timer_group_t *tg);
 													/* State of the connection */
+#ifdef ECM_STATE_OUTPUT_ENABLE
+typedef int (*ecm_tracker_state_get_callback_t)(struct ecm_tracker_instance *ti, struct ecm_state_file_instance *sfi);
+											/*
+											 * Get state output.
+											 * Returns zero on success.
+											 */
+#endif
 
 /*
  * struct ecm_tracker_instance
@@ -157,6 +163,9 @@ typedef void (*ecm_tracker_state_get_method_t)(struct ecm_tracker_instance *ti, 
 struct ecm_tracker_instance {
 	ecm_tracker_state_update_method_t state_update;
 	ecm_tracker_state_get_method_t state_get;
+#ifdef ECM_STATE_OUTPUT_ENABLE
+	ecm_tracker_state_get_callback_t state_text_get;		/* Return text containing its state */
+#endif
 	ecm_tracker_ref_method_t ref;
 	ecm_tracker_deref_method_t deref;
 };
