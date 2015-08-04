@@ -225,7 +225,7 @@ static unsigned int pin_job(struct host1x_job *job)
 
 unpin:
 	host1x_job_unpin(job);
-	return 0;
+	return -ENOMEM;
 }
 
 static unsigned int do_relocs(struct host1x_job *job, struct host1x_bo *cmdbuf)
@@ -528,7 +528,7 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 
 	/* pin memory */
 	err = pin_job(job);
-	if (!err)
+	if (err <= 0)
 		goto out;
 
 	/* patch gathers */
