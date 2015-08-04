@@ -58,7 +58,8 @@ void rk3288_ddr_resume(void);
 #define RK3288_CRU_SEL37_CON (0xf4)
 
 /* PMU_WAKEUP_CFG1 bits */
-#define PMU_ARMINT_WAKEUP_EN BIT(0)
+#define PMU_ARMINT_WAKEUP_EN		BIT(0)
+#define PMU_GPIOINT_WAKEUP_EN		BIT(3)
 
 enum rk3288_pwr_mode_con {
 	PMU_PWR_MODE_EN = 0,
