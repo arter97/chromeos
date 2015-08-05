@@ -142,7 +142,6 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 
 		DRM_DEBUG("IOMMU context initialized\n");
 		drm_mm_init(&tegra->mm, 0, SZ_2G);
-		mutex_init(&tegra->mm_lock);
 	}
 
 	/* Enable IOMMU for host1x */
