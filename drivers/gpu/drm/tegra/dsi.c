@@ -28,6 +28,47 @@
 #include "dsi.h"
 #include "mipi-phy.h"
 
+static const u32 init_reg[] = {
+	DSI_INT_ENABLE,
+	DSI_INT_STATUS,
+	DSI_INT_MASK,
+	DSI_INIT_SEQ_DATA_0,
+	DSI_INIT_SEQ_DATA_1,
+	DSI_INIT_SEQ_DATA_2,
+	DSI_INIT_SEQ_DATA_3,
+	DSI_INIT_SEQ_DATA_4,
+	DSI_INIT_SEQ_DATA_5,
+	DSI_INIT_SEQ_DATA_6,
+	DSI_INIT_SEQ_DATA_7,
+	DSI_INIT_SEQ_DATA_15,
+	DSI_DCS_CMDS,
+	DSI_PKT_SEQ_0_LO,
+	DSI_PKT_SEQ_1_LO,
+	DSI_PKT_SEQ_2_LO,
+	DSI_PKT_SEQ_3_LO,
+	DSI_PKT_SEQ_4_LO,
+	DSI_PKT_SEQ_5_LO,
+	DSI_PKT_SEQ_0_HI,
+	DSI_PKT_SEQ_1_HI,
+	DSI_PKT_SEQ_2_HI,
+	DSI_PKT_SEQ_3_HI,
+	DSI_PKT_SEQ_4_HI,
+	DSI_PKT_SEQ_5_HI,
+	DSI_CONTROL,
+	DSI_HOST_CONTROL,
+	DSI_PAD_CONTROL_0,
+	DSI_PAD_CONTROL_CD,
+	DSI_SOL_DELAY,
+	DSI_MAX_THRESHOLD,
+	DSI_TRIGGER,
+	DSI_TX_CRC,
+	DSI_INIT_SEQ_CONTROL,
+	DSI_PKT_LEN_0_1,
+	DSI_PKT_LEN_2_3,
+	DSI_PKT_LEN_4_5,
+	DSI_PKT_LEN_6_7,
+};
+
 struct tegra_dsi_state {
 	struct drm_connector_state base;
 
@@ -869,6 +910,17 @@ static int tegra_dsi_pad_calibrate(struct tegra_dsi *dsi)
 	return 0;
 }
 
+static void tegra_dsi_clear(struct tegra_dsi *dsi)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(init_reg); i++)
+		tegra_dsi_writel(dsi, 0, init_reg[i]);
+
+	if (dsi->slave)
+		return tegra_dsi_clear(dsi->slave);
+}
+
 static void tegra_dsi_encoder_mode_set(struct drm_encoder *encoder,
 				       struct drm_display_mode *mode,
 				       struct drm_display_mode *adjusted)
@@ -895,6 +947,8 @@ static void tegra_dsi_encoder_mode_set(struct drm_encoder *encoder,
 	 * multiply the period by 8.
 	 */
 	tegra_dsi_set_phy_timing(dsi, state->period * 8, &state->timing);
+
+	tegra_dsi_clear(dsi);
 
 	if (output->panel)
 		drm_panel_prepare(output->panel);
@@ -1261,12 +1315,6 @@ static ssize_t tegra_dsi_host_transfer(struct mipi_dsi_host *host,
 		usleep_range(10, 20);
 	}
 
-	value = tegra_dsi_readl(dsi, DSI_POWER_CONTROL);
-	value |= DSI_POWER_CONTROL_ENABLE;
-	tegra_dsi_writel(dsi, value, DSI_POWER_CONTROL);
-
-	usleep_range(5000, 10000);
-
 	value = DSI_HOST_CONTROL_CRC_RESET | DSI_HOST_CONTROL_TX_TRIG_HOST |
 		DSI_HOST_CONTROL_CS | DSI_HOST_CONTROL_ECC;
 
@@ -1281,6 +1329,14 @@ static ssize_t tegra_dsi_host_transfer(struct mipi_dsi_host *host,
 		value |= DSI_HOST_CONTROL_FIFO_SEL;
 
 	tegra_dsi_writel(dsi, value, DSI_HOST_CONTROL);
+
+	tegra_dsi_writel(dsi, 0, DSI_TRIGGER);
+
+	value = tegra_dsi_readl(dsi, DSI_POWER_CONTROL);
+	value |= DSI_POWER_CONTROL_ENABLE;
+	tegra_dsi_writel(dsi, value, DSI_POWER_CONTROL);
+
+	usleep_range(5000, 10000);
 
 	/*
 	 * For reads and messages with explicitly requested ACK, generate a
