@@ -2949,7 +2949,7 @@ static __init void tegra210_shared_clk_init(void)
 					0, "vic03");
 	clks[TEGRA210_CLK_VIC03_CBUS] = clk;
 
-	clk = tegra_clk_register_shared("nvjpg.cbus", &cbus_parents[0], 1, 0, 0,
+	clk = tegra_clk_register_shared("nvjpg.cbus", &cbus_parents[1], 1, 0, 0,
 					0, "nvjpg");
 	clks[TEGRA210_CLK_NVJPG_CBUS] = clk;
 
