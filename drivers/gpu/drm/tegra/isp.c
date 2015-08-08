@@ -176,7 +176,7 @@ static int isp_open_channel(struct tegra_drm_client *client,
 {
 	struct isp *isp = to_isp(client);
 
-	pm_runtime_get_sync(isp->dev);
+       // pm_runtime_get_sync(isp->dev);
 
 	context->channel = host1x_channel_get(isp->channel);
 	if (!context->channel)
@@ -195,8 +195,8 @@ static void isp_close_channel(struct tegra_drm_context *context)
 	host1x_channel_put(context->channel);
 	context->channel = NULL;
 
-	pm_runtime_mark_last_busy(isp->dev);
-	pm_runtime_put_autosuspend(isp->dev);
+       // pm_runtime_mark_last_busy(isp->dev);
+       // pm_runtime_put_autosuspend(isp->dev);
 }
 
 static int isp_is_addr_reg(struct device *dev, u32 class, u32 offset)
@@ -307,10 +307,10 @@ static int isp_probe(struct platform_device *pdev)
 		goto error_isp_power_off;
 	}
 
-	pm_runtime_set_active(dev);
-	pm_runtime_enable(dev);
-	pm_runtime_use_autosuspend(dev);
-	pm_runtime_set_autosuspend_delay(dev, 5000);
+       // pm_runtime_set_active(dev);
+       // pm_runtime_enable(dev);
+       // pm_runtime_use_autosuspend(dev);
+      //  pm_runtime_set_autosuspend_delay(dev, 5000);
 
 	dev_info(&pdev->dev, "initialized");
 
