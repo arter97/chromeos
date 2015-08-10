@@ -1306,6 +1306,10 @@ static void tegra_crtc_disable(struct drm_crtc *crtc)
 	drm_crtc_vblank_off(crtc);
 
 	dc->reg_initialized = false;
+	if (dc->is_powered) {
+		tegra_powergate_power_off(dc->powergate);
+		dc->is_powered = false;
+	}
 }
 
 static bool tegra_crtc_mode_fixup(struct drm_crtc *crtc,
@@ -1471,6 +1475,10 @@ static void tegra_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	struct tegra_dc *dc = to_tegra_dc(crtc);
 	u32 value;
 
+	if (!dc->is_powered) {
+		tegra_powergate_power_on(dc->powergate);
+		dc->is_powered = true;
+	}
 	tegra_dc_init_hw(dc);
 
 	tegra_dc_commit_state(dc, state);
@@ -2407,6 +2415,7 @@ static int tegra_dc_probe(struct platform_device *pdev)
 			return err;
 		}
 		clk_prepare_enable(dc->clk);
+		dc->is_powered = true;
 	} else {
 		err = clk_prepare_enable(dc->clk);
 		if (err < 0) {

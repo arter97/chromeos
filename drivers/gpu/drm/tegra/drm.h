@@ -172,6 +172,7 @@ struct tegra_dc {
 	struct iommu_domain *domain;
 
 	bool reg_initialized;
+	bool is_powered;
 };
 
 static inline struct tegra_dc *
