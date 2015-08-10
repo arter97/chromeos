@@ -310,6 +310,7 @@ struct ath10k_sta {
 	/* protected by conf_mutex */
 	bool aggr_mode;
 #endif
+	struct ath10k_smart_ant_sta *smart_ant_sta;
 };
 
 #define ATH10K_VDEV_SETUP_TIMEOUT_HZ (5*HZ)
@@ -416,6 +417,7 @@ struct ath10k_debug {
 	u32 nf_cal_period;
 
 	struct ath10k_fw_crash_data *fw_crash_data;
+	struct dentry *debugfs_smartant;
 };
 
 enum ath10k_state {
