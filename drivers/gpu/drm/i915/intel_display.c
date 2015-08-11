@@ -10362,6 +10362,11 @@ static int intel_crtc_set_config(struct drm_mode_set *set)
 
 	dev = set->crtc->dev;
 
+	if (dev_dark_resume_active(dev->dev)) {
+		dev_info(dev->dev, "disabled for dark resume\n");
+		return 0;
+	}
+
 	ret = -ENOMEM;
 	config = kzalloc(sizeof(*config), GFP_KERNEL);
 	if (!config)
