@@ -7,10 +7,13 @@
  * (at your option) any later version.
  */
 
-#include <linux/module.h>
-#include <linux/platform_device.h>
+#include <linux/crc16.h>
 #include <linux/mfd/syscon.h>
+#include <linux/module.h>
+#include <linux/of_platform.h>
+#include <linux/platform_device.h>
 #include <linux/regmap.h>
+
 #include <drm/drm_of.h>
 #include <drm/drmP.h>
 #include <drm/drm_crtc_helper.h>
@@ -20,6 +23,8 @@
 
 #include "rockchip_drm_drv.h"
 #include "rockchip_drm_vop.h"
+
+#include "../../../../arch/arm/mach-rockchip/efuse.h"
 
 #define GRF_SOC_CON6                    0x025c
 #define HDMI_SEL_VOP_LIT                (1 << 4)
@@ -313,6 +318,83 @@ static struct drm_encoder_helper_funcs dw_hdmi_rockchip_encoder_helper_funcs = {
 	.disable    = dw_hdmi_rockchip_encoder_disable,
 };
 
+static ssize_t hdcp_key_store(struct device *dev, struct device_attribute *attr,
+			      const char *buf, size_t count)
+{
+	struct dw_hdmi_hdcp_key_1x *key;
+	struct device_node *efuse_np;
+	struct platform_device *efuse;
+	char uid[EFUSE_CHIP_UID_LEN];
+	u16 encrypt_seed;
+	int retval;
+
+	key = kzalloc(sizeof(*key), GFP_KERNEL);
+	if (IS_ERR(key))
+		return -ENOMEM;
+
+	/*
+	 * The HDCP Key format should look like this: "12345678...",
+	 * every two charactor stand for a byte, so the total key size
+	 * would be (308 * 2) byte.
+	 */
+	if (count < (DW_HDMI_HDCP_KEY_LEN * 2))
+		goto err_key_format;
+
+	efuse_np = of_parse_phandle(dev->of_node, "rockchip,efuse", 0);
+	if (!efuse_np) {
+		dev_err(dev, "missing rockchip,efuse property\n");
+		goto err_key_format;
+	}
+
+	efuse = of_find_device_by_node(efuse_np);
+	of_node_put(efuse_np);
+
+	if (!efuse) {
+		dev_err(dev, "couldn't find efuse device\n");
+		goto err_key_format;
+	}
+
+	retval = rockchip_efuse_get_uid(efuse, uid);
+	platform_device_put(efuse);
+
+	if (retval) {
+		dev_err(dev, "failed to read efuse cpu uid\n");
+		goto err_key_format;
+	}
+
+	/*
+	 * The format of input HDCP Key should be "12345678...".
+	 * there is no standard format for HDCP keys, so it is
+	 * just made up for this driver.
+	 *
+	 * The "ksv & device_key & sha" should parsed from input data
+	 * buffer, and the "seed" would take the crc16 of cpu uid.
+	 */
+	retval = hex2bin((u8 *)key, buf, DW_HDMI_HDCP_KEY_LEN);
+	if (retval) {
+		dev_err(dev, "Failed to decode the input HDCP key format\n");
+		goto err_key_format;
+	}
+
+	encrypt_seed = crc16(0xFFFF, uid, EFUSE_CHIP_UID_LEN);
+	key->seed[0] = encrypt_seed & 0xFF;
+	key->seed[1] = (encrypt_seed >> 8) & 0xFF;
+
+	retval = dw_hdmi_config_hdcp_key(dev, key);
+	if (retval)
+		goto err_key_format;
+
+	kfree(key);
+
+	return DW_HDMI_HDCP_KEY_LEN * 2;
+
+err_key_format:
+	kfree(key);
+
+	return -EINVAL;
+}
+static DEVICE_ATTR(hdcp_key, S_IWUSR, NULL, hdcp_key_store);
+
 static const struct dw_hdmi_plat_data rockchip_hdmi_drv_data = {
 	.mode_valid = dw_hdmi_rockchip_mode_valid,
 	.mpll_cfg   = rockchip_mpll_cfg,
@@ -377,6 +459,8 @@ static int dw_hdmi_rockchip_bind(struct device *dev, struct device *master,
 		dev_err(hdmi->dev, "Unable to parse OF data\n");
 		return ret;
 	}
+
+	device_create_file(dev, &dev_attr_hdcp_key);
 
 	drm_encoder_helper_add(encoder, &dw_hdmi_rockchip_encoder_helper_funcs);
 	drm_encoder_init(drm, encoder, &dw_hdmi_rockchip_encoder_funcs,

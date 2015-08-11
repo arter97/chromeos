@@ -490,6 +490,19 @@
 #define HDMI_A_PRESETUP                         0x501A
 #define HDMI_A_SRM_BASE                         0x5020
 
+/* HDCP Registers */
+#define HDMI_HDCPREG_RMCTL                      0x780e
+#define HDMI_HDCPREG_RMSTS                      0x780f
+#define HDMI_HDCPREG_SEED0                      0x7810
+#define HDMI_HDCPREG_SEED1                      0x7811
+#define HDMI_HDCPREG_DPK0                       0x7812
+#define HDMI_HDCPREG_DPK1                       0x7813
+#define HDMI_HDCPREG_DPK2                       0x7814
+#define HDMI_HDCPREG_DPK3                       0x7815
+#define HDMI_HDCPREG_DPK4                       0x7816
+#define HDMI_HDCPREG_DPK5                       0x7817
+#define HDMI_HDCPREG_DPK6                       0x7818
+
 /* CEC Engine Registers */
 #define HDMI_CEC_CTRL                           0x7D00
 #define HDMI_CEC_STAT                           0x7D01
@@ -1078,6 +1091,13 @@ enum {
 	HDMI_A_HDCPCFG1_ENCRYPTIONDISABLE_ENABLE = 0x0,
 	HDMI_A_HDCPCFG1_SWRESET_MASK = 0x1,
 	HDMI_A_HDCPCFG1_SWRESET_ASSERT = 0x0,
+
+/* HDCPREG_RMSTS field values */
+	DPK_WR_OK_STS = 0x40,
+
+/* A_APIINT_STAT field values */
+	HDMI_A_APIINTSTAT_HDCP_ENGAGED = 0x80,
+	HDMI_A_APIINTSTAT_HDCP_FAILED = 0x40,
 
 /* A_VIDPOLCFG field values */
 	HDMI_A_VIDPOLCFG_UNENCRYPTCONF_MASK = 0x60,

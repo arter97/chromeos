@@ -19,6 +19,14 @@ enum {
 	DW_HDMI_RES_MAX,
 };
 
+enum {
+	DW_HDMI_HDCP_KSV_LEN = 8,
+	DW_HDMI_HDCP_SHA_LEN = 20,
+	DW_HDMI_HDCP_DPK_LEN = 280,
+	DW_HDMI_HDCP_KEY_LEN = 308,
+	DW_HDMI_HDCP_SEED_LEN = 2,
+};
+
 struct dw_hdmi;
 
 enum dw_hdmi_devtype {
@@ -60,6 +68,13 @@ struct dw_hdmi_audio_data {
 	void (*set_sample_rate)(struct dw_hdmi *hdmi, unsigned int rate);
 };
 
+struct dw_hdmi_hdcp_key_1x {
+	u8 ksv[DW_HDMI_HDCP_KSV_LEN];
+	u8 device_key[DW_HDMI_HDCP_DPK_LEN];
+	u8 sha1[DW_HDMI_HDCP_SHA_LEN];
+	u8 seed[DW_HDMI_HDCP_SEED_LEN];
+};
+
 struct dw_hdmi_plat_data {
 	enum dw_hdmi_devtype dev_type;
 	const struct dw_hdmi_mpll_config *mpll_cfg;
@@ -76,4 +91,6 @@ int dw_hdmi_bind(struct device *dev, struct device *master,
 		 void *data, struct drm_encoder *encoder,
 		 struct resource *iores, int irq,
 		 const struct dw_hdmi_plat_data *plat_data);
+int dw_hdmi_config_hdcp_key(struct device *dev,
+			    const struct dw_hdmi_hdcp_key_1x *keys);
 #endif /* __IMX_HDMI_H__ */

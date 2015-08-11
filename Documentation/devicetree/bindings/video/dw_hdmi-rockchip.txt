@@ -17,6 +17,8 @@ Required properties:
 Optional properties
 - ddc-i2c-bus: phandle of an I2C controller used for DDC EDID probing
 - clocks, clock-names: phandle to the HDMI CEC clock, name should be "cec"
+- rockchip,efuse: phandle of the efuse controller used to read cpu uid as
+  seed for HDCP key encryption.
 
 Example:
 hdmi: hdmi@ff980000 {
@@ -25,6 +27,7 @@ hdmi: hdmi@ff980000 {
 	reg-io-width = <4>;
 	ddc-i2c-bus = <&i2c5>;
 	rockchip,grf = <&grf>;
+	rockchip,efuse = <&efuse>
 	interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
 	clocks = <&cru  PCLK_HDMI_CTRL>, <&cru SCLK_HDMI_HDCP>;
 	clock-names = "iahb", "isfr";
