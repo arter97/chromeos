@@ -2208,6 +2208,7 @@ struct rt5645_priv {
 
 	int jack_type;
 	bool en_button_func;
+	bool hp_on;
 };
 
 int rt5645_set_jack_detect(struct snd_soc_codec *codec,
