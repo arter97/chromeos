@@ -31,7 +31,7 @@ cpu_thermal0: cpu_thermal0 {
 			type = "passive";
 		};
 		thermal0_cpu_crit: thermal0_cpu_crit {
-			temperature = <100000>; /* millicelsius */
+			temperature = <120000>; /* millicelsius */
 			hysteresis = <2000>; /* millicelsius */
 			type = "critical";
 		};
@@ -61,7 +61,7 @@ cpu_thermal1: cpu_thermal1 {
 			type = "passive";
 		};
 		thermal1_cpu_crit: thermal1_cpu_crit {
-			temperature = <100000>; /* millicelsius */
+			temperature = <120000>; /* millicelsius */
 			hysteresis = <2000>; /* millicelsius */
 			type = "critical";
 		};
@@ -83,7 +83,7 @@ cpu_thermal2: cpu_thermal2 {
 			type = "passive";
 		};
 		thermal2_cpu_crit: thermal2_cpu_crit {
-			temperature = <100000>; /* millicelsius */
+			temperature = <120000>; /* millicelsius */
 			hysteresis = <2000>; /* millicelsius */
 			type = "critical";
 		};
