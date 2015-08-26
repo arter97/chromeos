@@ -66,7 +66,7 @@ static const int dw_hdmi_rates[] = {
 	78720000,	/* for 78.75 MHz, .038% off */
 	79500000,
 	83520000,	/* for 83.5 MHz,  .024% off */
-	85440000,	/* for 85.5 MHz,  .070% off */
+	85500000,
 	88695653,	/* for 88.75 MHz, .061% off */
 	97714285,	/* for 97.75 MHz, .037% off */
 	101052632,	/* for 101.0 MHz, .052% off */
