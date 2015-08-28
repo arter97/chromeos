@@ -2373,13 +2373,13 @@ static int tegra_dc_probe(struct platform_device *pdev)
 		else
 			dc->powergate = TEGRA_POWERGATE_DISB;
 
-		err = tegra_powergate_sequence_power_up(dc->powergate, dc->clk,
-							dc->rst);
+		err = tegra_powergate_power_on(dc->powergate);
 		if (err < 0) {
 			dev_err(&pdev->dev, "failed to power partition: %d\n",
 				err);
 			return err;
 		}
+		clk_prepare_enable(dc->clk);
 	} else {
 		err = clk_prepare_enable(dc->clk);
 		if (err < 0) {
@@ -2461,7 +2461,7 @@ static int tegra_dc_remove(struct platform_device *pdev)
 	reset_control_assert(dc->rst);
 
 	if (dc->soc->has_powergate)
-		tegra_power_partition_power_off(dc->powergate);
+		tegra_powergate_power_off(dc->powergate);
 
 	clk_disable_unprepare(dc->clk);
 	clk_disable_unprepare(dc->emc_clk);

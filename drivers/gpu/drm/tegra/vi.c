@@ -80,7 +80,7 @@ static int vi_power_off(struct device *dev)
 
 	clk_disable_unprepare(vi->clk);
 
-	return tegra_power_partition_power_off(vi->config->powergate_id);
+	return tegra_powergate_power_off(vi->config->powergate_id);
 }
 
 static int vi_power_on(struct device *dev)
@@ -88,14 +88,16 @@ static int vi_power_on(struct device *dev)
 	struct vi *vi = dev_get_drvdata(dev);
 	int err;
 
-	err = tegra_powergate_sequence_power_up(vi->config->powergate_id,
-						vi->clk, vi->rst);
+	err = tegra_powergate_power_on(vi->config->powergate_id);
 	if (err)
 		return err;
 
+	clk_prepare_enable(vi->clk);
+
 	err = regulator_enable(vi->reg);
 	if (err) {
-		tegra_power_partition_power_off(TEGRA_POWERGATE_VENC);
+		clk_disable_unprepare(vi->clk);
+		tegra_powergate_power_off(TEGRA_POWERGATE_VENC);
 		dev_err(dev, "enable csi regulator failed.\n");
 		return err;
 	}

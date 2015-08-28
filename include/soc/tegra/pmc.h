@@ -78,6 +78,7 @@ int tegra_pmc_cpu_remove_clamping(int cpuid);
 #define TEGRA_POWERGATE_AUD	27
 #define TEGRA_POWERGATE_DFD	28
 #define TEGRA_POWERGATE_VE2	29
+#define TEGRA_POWERGATE_MAXIMUM	30
 
 #define TEGRA_POWERGATE_3D0	TEGRA_POWERGATE_3D
 
@@ -124,19 +125,12 @@ struct tegra_utmi_pad_config {
 
 #ifdef CONFIG_ARCH_TEGRA
 int tegra_powergate_is_powered(int id);
-int tegra_power_partition_power_on(int id);
-int tegra_power_partition_power_off(int id);
 int tegra_powergate_remove_clamping(int id);
 /* Only for Tegra124 and later */
 int tegra_powergate_gpu_set_clamping(bool assert);
 
-/* Must be called with clk disabled, and returns with clk enabled */
-int tegra_powergate_sequence_power_up(int id, struct clk *clk,
-				      struct reset_control *rst);
-
-/* Must be called with clk enabled, and returns with clk disabled */
-int tegra_powergate_sequence_power_down(int id, struct clk *clk,
-					struct reset_control *rst);
+int tegra_powergate_power_on(int id);
+int tegra_powergate_power_off(int id);
 
 int tegra_io_rail_power_on(int id);
 int tegra_io_rail_power_off(int id);
@@ -156,29 +150,17 @@ static inline int tegra_powergate_is_powered(int id)
 	return -ENOSYS;
 }
 
-static inline int tegra_power_partition_power_on(int id)
-{
-	return -ENOSYS;
-}
-
-static inline int tegra_power_partition_power_off(int id)
-{
-	return -ENOSYS;
-}
-
 static inline int tegra_powergate_remove_clamping(int id)
 {
 	return -ENOSYS;
 }
 
-static inline int tegra_powergate_sequence_power_up(int id, struct clk *clk,
-						    struct reset_control *rst)
+static int tegra_powergate_power_on(int id)
 {
 	return -ENOSYS;
 }
 
-static inline int tegra_powergate_sequence_power_down(int id, struct clk *clk,
-						      struct reset_control *rst)
+static int tegra_powergate_power_off(int id)
 {
 	return -ENOSYS;
 }

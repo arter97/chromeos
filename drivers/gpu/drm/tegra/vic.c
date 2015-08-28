@@ -95,7 +95,7 @@ static int vic_power_off(struct device *dev)
 
 	clk_disable_unprepare(vic->clk);
 
-	return tegra_power_partition_power_off(vic->config->powergate_id);
+	return tegra_powergate_power_off(vic->config->powergate_id);
 }
 
 static int vic_power_on(struct device *dev)
@@ -107,12 +107,13 @@ static int vic_power_on(struct device *dev)
 	if (err)
 		return err;
 
-	err = tegra_powergate_sequence_power_up(vic->config->powergate_id,
-						vic->clk, vic->rst);
+	err = tegra_powergate_power_on(vic->config->powergate_id);
 	if (err) {
 		falcon_power_off(&vic->falcon);
 		return err;
 	}
+
+	clk_prepare_enable(vic->clk);
 
 	/*
 	 * Disable SLCG to workaround MBIST issue in IP level. This code
