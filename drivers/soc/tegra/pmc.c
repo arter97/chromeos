@@ -484,10 +484,10 @@ static int __tegra_powergate_set(int id, bool new_state)
 }
 
 /**
- * tegra_powergate_power_on() - power on partition
+ * tegra_power_partition_power_on() - power on partition
  * @id: partition ID
  */
-int tegra_powergate_power_on(int id)
+int tegra_power_partition_power_on(int id)
 {
 	int ret = 0;
 
@@ -503,10 +503,10 @@ int tegra_powergate_power_on(int id)
 }
 
 /**
- * tegra_powergate_power_off() - power off partition
+ * tegra_power_partition_power_off() - power off partition
  * @id: partition ID
  */
-int tegra_powergate_power_off(int id)
+int tegra_power_partition_power_off(int id)
 {
 	int ret = 0;
 
@@ -522,7 +522,7 @@ int tegra_powergate_power_off(int id)
 
 	return ret;
 }
-EXPORT_SYMBOL(tegra_powergate_power_off);
+EXPORT_SYMBOL(tegra_power_partition_power_off);
 
 /**
  * tegra_powergate_is_powered() - check if partition is powered
@@ -811,7 +811,7 @@ int tegra_pmc_cpu_power_on(int cpuid)
 	if (id < 0)
 		return id;
 
-	return tegra_powergate_power_on(id);
+	return tegra_power_partition_power_on(id);
 }
 
 /**

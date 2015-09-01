@@ -71,7 +71,7 @@ static int nvjpg_power_off(struct device *dev)
 
 	clk_disable_unprepare(nvjpg->clk);
 
-	return tegra_powergate_power_off(nvjpg->config->powergate_id);
+	return tegra_power_partition_power_off(nvjpg->config->powergate_id);
 }
 
 static int nvjpg_power_on(struct device *dev)
