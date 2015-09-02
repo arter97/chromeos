@@ -1558,6 +1558,12 @@ typedef struct drm_i915_private {
 	struct drm_property *force_audio_property;
 	struct drm_property *psr_property;
 
+	/**
+	 * av_mutex - mutex for audio/video sync
+	 *
+	 */
+	struct mutex av_mutex;
+
 	uint32_t hw_context_size;
 	struct list_head context_list;
 

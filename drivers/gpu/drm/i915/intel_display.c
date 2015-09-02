@@ -7267,6 +7267,31 @@ static struct {
 	{ 148500, AUD_CONFIG_PIXEL_CLOCK_HDMI_148500 },
 };
 
+/* HDMI N/CTS table */
+#define TMDS_297M 297000
+#define TMDS_296M DIV_ROUND_UP(297000 * 1000, 1001)
+static const struct {
+	int sample_rate;
+	int clock;
+	int n;
+	int cts;
+} aud_ncts[] = {
+	{ 44100, TMDS_296M, 4459, 234375 },
+	{ 44100, TMDS_297M, 4704, 247500 },
+	{ 48000, TMDS_296M, 5824, 281250 },
+	{ 48000, TMDS_297M, 5120, 247500 },
+	{ 32000, TMDS_296M, 5824, 421875 },
+	{ 32000, TMDS_297M, 3072, 222750 },
+	{ 88200, TMDS_296M, 8918, 234375 },
+	{ 88200, TMDS_297M, 9408, 247500 },
+	{ 96000, TMDS_296M, 11648, 281250 },
+	{ 96000, TMDS_297M, 10240, 247500 },
+	{ 176400, TMDS_296M, 17836, 234375 },
+	{ 176400, TMDS_297M, 18816, 247500 },
+	{ 192000, TMDS_296M, 23296, 281250 },
+	{ 192000, TMDS_297M, 20480, 247500 },
+};
+
 /* get AUD_CONFIG_PIXEL_CLOCK_HDMI_* value for mode */
 static u32 audio_config_hdmi_pixel_clock(struct drm_display_mode *mode)
 {
@@ -7287,6 +7312,31 @@ static u32 audio_config_hdmi_pixel_clock(struct drm_display_mode *mode)
 		      hdmi_audio_clock[i].config);
 
 	return hdmi_audio_clock[i].config;
+}
+
+static int audio_config_get_n(const struct drm_display_mode *mode, int rate)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(aud_ncts); i++) {
+		if ((rate == aud_ncts[i].sample_rate) &&
+			(mode->clock == aud_ncts[i].clock)) {
+			return aud_ncts[i].n;
+		}
+	}
+	return 0;
+}
+
+/* check whether N/CTS/M need be set manually */
+static bool audio_rate_need_prog(struct intel_crtc *crtc,
+				 struct drm_display_mode *mode)
+{
+	if (((mode->clock == TMDS_297M) ||
+		(mode->clock == TMDS_296M)) &&
+		intel_pipe_has_type(&crtc->base, INTEL_OUTPUT_HDMI))
+		return true;
+	else
+		return false;
 }
 
 static bool intel_eld_uptodate(struct drm_connector *connector,
@@ -7389,6 +7439,8 @@ static void haswell_write_eld(struct drm_connector *connector,
 
 	assert_pipe_disabled(dev_priv, to_intel_crtc(crtc)->pipe);
 
+	mutex_lock(&dev_priv->av_mutex);
+
 	/* Set ELD valid state */
 	tmp = I915_READ(aud_cntrl_st2);
 	DRM_DEBUG_DRIVER("HDMI audio: pin eld vld status=0x%08x\n", tmp);
@@ -7416,6 +7468,8 @@ static void haswell_write_eld(struct drm_connector *connector,
 	} else {
 		I915_WRITE(aud_config, audio_config_hdmi_pixel_clock(mode));
 	}
+
+	mutex_unlock(&dev_priv->av_mutex);
 
 	if (intel_eld_uptodate(connector,
 			       aud_cntrl_st2, eldv,
@@ -7562,6 +7616,84 @@ void intel_write_eld(struct drm_encoder *encoder,
 
 	if (dev_priv->display.write_eld)
 		dev_priv->display.write_eld(connector, crtc, mode);
+}
+
+int i915_audio_component_sync_audio_rate(struct drm_i915_private *dev_priv,
+					 int port, int rate)
+{
+	struct drm_device *drm_dev = dev_priv->dev;
+	struct intel_encoder *intel_encoder;
+	struct intel_digital_port *intel_dig_port;
+	struct intel_crtc *crtc;
+	struct drm_display_mode *mode;
+	enum pipe pipe = -1;
+	u32 tmp;
+	int n_low, n_up, n;
+
+	/* HSW, BDW need this fix */
+	if (!IS_BROADWELL(drm_dev) &&
+		!IS_HASWELL(drm_dev))
+		return 0;
+
+	mutex_lock(&dev_priv->av_mutex);
+	/* 1. get the pipe */
+	list_for_each_entry(intel_encoder, &drm_dev->mode_config.encoder_list,
+			    base.head) {
+		if (intel_encoder->type != INTEL_OUTPUT_HDMI)
+			continue;
+		intel_dig_port = enc_to_dig_port(&intel_encoder->base);
+		if (port == intel_dig_port->port) {
+			crtc = to_intel_crtc(intel_encoder->base.crtc);
+			if (!crtc) {
+				DRM_DEBUG_KMS("%s: crtc is NULL\n", __func__);
+				continue;
+			}
+			pipe = crtc->pipe;
+			break;
+		}
+	}
+
+	if (pipe == INVALID_PIPE) {
+		DRM_DEBUG_KMS("no pipe for the port %c\n", port_name(port));
+		mutex_unlock(&dev_priv->av_mutex);
+		return -ENODEV;
+	}
+	DRM_DEBUG_KMS("pipe %c connects port %c\n",
+					pipe_name(pipe), port_name(port));
+	mode = &crtc->config.adjusted_mode;
+
+	/* 2. check whether to set the N/CTS/M manually or not */
+	if (!audio_rate_need_prog(crtc, mode)) {
+		tmp = I915_READ(HSW_AUD_CFG(pipe));
+		tmp &= ~AUD_CONFIG_N_PROG_ENABLE;
+		I915_WRITE(HSW_AUD_CFG(pipe), tmp);
+		mutex_unlock(&dev_priv->av_mutex);
+		return 0;
+	}
+
+	n = audio_config_get_n(mode, rate);
+	if (n == 0) {
+		DRM_DEBUG_KMS("Using automatic mode for N value on port %c\n",
+						port_name(port));
+		tmp = I915_READ(HSW_AUD_CFG(pipe));
+		tmp &= ~AUD_CONFIG_N_PROG_ENABLE;
+		I915_WRITE(HSW_AUD_CFG(pipe), tmp);
+		mutex_unlock(&dev_priv->av_mutex);
+		return 0;
+	}
+	n_low = n & 0xfff;
+	n_up = (n >> 12) & 0xff;
+
+	/* 4. set the N/CTS/M */
+	tmp = I915_READ(HSW_AUD_CFG(pipe));
+	tmp &= ~(AUD_CONFIG_UPPER_N_VALUE | AUD_CONFIG_LOWER_N_VALUE);
+	tmp |= ((n_up << AUD_CONFIG_UPPER_N_SHIFT) |
+			(n_low << AUD_CONFIG_LOWER_N_SHIFT) |
+			AUD_CONFIG_N_PROG_ENABLE);
+	I915_WRITE(HSW_AUD_CFG(pipe), tmp);
+
+	mutex_unlock(&dev_priv->av_mutex);
+	return 0;
 }
 
 static void i845_update_cursor(struct drm_crtc *crtc, u32 base)
