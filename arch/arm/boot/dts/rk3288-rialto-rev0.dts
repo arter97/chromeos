@@ -175,16 +175,6 @@
 	status = "disabled";
 };
 
-&i2c5 {
-	/*
-	 * This i2c port curiously has to be on, otherwise we won't boot,
-	 * perhaps because hdmi still wants this i2c interface?
-	 */
-	status = "okay";
-
-	/* Nothing is connected here, not even pullups */
-};
-
 &pwm0 {
 	status = "okay";
 };
