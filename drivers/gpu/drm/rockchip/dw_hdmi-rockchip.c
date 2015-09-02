@@ -24,14 +24,6 @@
 #define GRF_SOC_CON6                    0x025c
 #define HDMI_SEL_VOP_LIT                (1 << 4)
 
-#define GRF_GPIO7CL_IOMUX               0x74
-#define GPIO7C3_SEL_I2C5HDMI_SDA        0x2000
-#define GPIO7C3_SEL_SHIFT               (0x3000 << 16)
-
-#define GRF_GPIO7CH_IOMUX               0x78
-#define GPIO7C4_SEL_I2C5HDMI_SCL        0x2
-#define GPIO7C4_SEL_SHIFT               (0x3 << 16)
-
 struct rockchip_hdmi {
 	struct device *dev;
 	struct regmap *regmap;
@@ -193,33 +185,14 @@ static const struct dw_hdmi_phy_config rockchip_phy_config[] = {
 	{ ~0UL,	                    0x0000, 0x0000, 0x0000}
 };
 
-static void rockchip_hdmi_aux_ddc(struct rockchip_hdmi *hdmi)
-{
-	regmap_write(hdmi->regmap, GRF_GPIO7CL_IOMUX,
-		     GPIO7C3_SEL_I2C5HDMI_SDA | GPIO7C3_SEL_SHIFT);
-
-	regmap_write(hdmi->regmap, GRF_GPIO7CH_IOMUX,
-		     GPIO7C4_SEL_I2C5HDMI_SCL | GPIO7C4_SEL_SHIFT);
-}
-
 static int rockchip_hdmi_parse_dt(struct rockchip_hdmi *hdmi)
 {
 	struct device_node *np = hdmi->dev->of_node;
-	struct device_node *ddc_node;
 
 	hdmi->regmap = syscon_regmap_lookup_by_phandle(np, "rockchip,grf");
 	if (IS_ERR(hdmi->regmap)) {
 		dev_err(hdmi->dev, "Unable to get rockchip,grf\n");
 		return PTR_ERR(hdmi->regmap);
-	}
-
-	ddc_node = of_parse_phandle(np, "ddc-i2c-bus", 0);
-	if (ddc_node) {
-		dev_dbg(hdmi->dev, "find ddc from devicetree\n");
-		of_node_put(ddc_node);
-	} else {
-		dev_dbg(hdmi->dev, "no ddc in devicetree, using IP ddc\n");
-		rockchip_hdmi_aux_ddc(hdmi);
 	}
 
 	return 0;
