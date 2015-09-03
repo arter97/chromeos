@@ -23,12 +23,15 @@
 #include <linux/reset.h>
 #include <linux/iommu.h>
 #include <linux/regulator/consumer.h>
+#include <linux/of_address.h>
 #include <soc/tegra/pmc.h>
 
 #include "drm.h"
 #include "vi.h"
 
 #define VI_NUM_SYNCPTS 6
+#define PLLD_BASE			0xd0
+#define PLLD_BASE_CSI_CLKSOURCE	(1 << 23)
 
 struct vi_config {
 	u32 class_id;
@@ -46,6 +49,9 @@ struct vi {
 	struct reset_control *rst;
 	struct regulator *reg;
 
+	struct notifier_block slcg_notifier;
+	void __iomem *clk_base;
+
 	struct iommu_domain *domain;
 
 	/* Platform configuration */
@@ -60,6 +66,43 @@ static inline struct vi *to_vi(struct tegra_drm_client *client)
 static inline void vi_writel(struct vi *vi, u32 v, u32 r)
 {
 	writel(v, vi->regs + r);
+}
+
+static int vi_slcg_handler(struct notifier_block *nb,
+	unsigned long unused0, void *unused1)
+{
+	struct vi *vi = container_of(nb, struct vi, slcg_notifier);
+	struct clk *clk;
+	u32	val;
+	int ret = 0;
+
+	clk = devm_clk_get(vi->dev, "plld");
+	if (IS_ERR(clk))
+		return -EINVAL;
+
+	/* Make CSI sourced from PLL_D */
+	val = readl(vi->clk_base + PLLD_BASE);
+	val |= PLLD_BASE_CSI_CLKSOURCE;
+	writel(val, vi->clk_base + PLLD_BASE);
+
+	/* Enable PLL_D */
+	ret = clk_prepare_enable(clk);
+	if (ret) {
+		dev_err(vi->dev, "can't enable pll_d");
+		return ret;
+	}
+
+	udelay(1);
+
+	/* Disable PLL_D */
+	clk_disable_unprepare(clk);
+
+	/* Restore CSI source */
+	val = readl(vi->clk_base + PLLD_BASE);
+	val &= ~PLLD_BASE_CSI_CLKSOURCE;
+	writel(val, vi->clk_base + PLLD_BASE);
+
+	return NOTIFY_OK;
 }
 
 static int vi_power_off(struct device *dev)
@@ -293,9 +336,15 @@ static const struct of_device_id vi_match[] = {
 	{ },
 };
 
+static const struct of_device_id car_match[] = {
+	{ .compatible = "nvidia,tegra210-car" },
+	{},
+};
+
 static int vi_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *match;
+	struct device_node *node;
 	struct vi_config *vi_config;
 	struct device *dev = &pdev->dev;
 	struct host1x_syncpt **syncpts;
@@ -344,6 +393,18 @@ static int vi_probe(struct platform_device *pdev)
 		return err;
 	}
 
+	node = of_find_matching_node(NULL, car_match);
+	if (!node) {
+		dev_err(&pdev->dev, "Error finding CAR device.\n");
+		return -EINVAL;
+	}
+
+	vi->clk_base = of_iomap(node, 0);
+	if (!vi->clk_base) {
+		dev_err(&pdev->dev, "Can't map CAR registers\n");
+		return -EINVAL;
+	}
+
 	INIT_LIST_HEAD(&vi->client.base.list);
 	vi->client.base.ops = &vi_client_ops;
 	vi->client.base.dev = dev;
@@ -355,6 +416,10 @@ static int vi_probe(struct platform_device *pdev)
 
 	INIT_LIST_HEAD(&vi->client.list);
 	vi->client.ops = &vi_ops;
+
+	vi->slcg_notifier.notifier_call = vi_slcg_handler;
+	tegra_slcg_register_notifier(vi->config->powergate_id,
+		&vi->slcg_notifier);
 
 	platform_set_drvdata(pdev, vi);
 
@@ -395,6 +460,9 @@ static int vi_remove(struct platform_device *pdev)
 			err);
 
 	vi_power_off(&pdev->dev);
+
+	tegra_slcg_unregister_notifier(vi->config->powergate_id,
+		&vi->slcg_notifier);
 
 	return err;
 }
