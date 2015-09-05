@@ -435,6 +435,10 @@ enum clk_id {
 	tegra_clk_cap_vcore_abus,
 	tegra_clk_override_abus,
 	tegra_clk_sor_safe,
+	tegra_clk_mc_capa,
+	tegra_clk_mc_cbpa,
+	tegra_clk_mc_ccpa,
+	tegra_clk_mc_cdpa,
 	tegra_clk_max,
 };
 
