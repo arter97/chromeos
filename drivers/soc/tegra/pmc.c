@@ -2772,6 +2772,12 @@ static int tegra_powergate_init(struct tegra_pmc *pmc,
 		ret = tegra_powergate_init_one(np, pg);
 	}
 
+	/*
+	 * i2c6 needs dpaux and sor0 enabled, so forcibly enable
+	 * SOR power partition first
+	 */
+	tegra_powergate_power_on(TEGRA_POWERGATE_SOR);
+
 	return ret;
 }
 
