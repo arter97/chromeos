@@ -391,6 +391,14 @@
 	i2c-scl-rising-time-ns = <300>;		/* 225ns measured */
 };
 
+&i2c5 {
+	status = "okay";
+
+	clock-frequency = <100000>;
+	i2c-scl-falling-time-ns = <300>;
+	i2c-scl-rising-time-ns = <1000>;
+};
+
 &wdt {
 	status = "okay";
 };
@@ -428,8 +436,7 @@
 };
 
 &hdmi {
-	pinctrl-names = "default";
-	pinctrl-0 = <&hdmi_ddc>;
+	ddc-i2c-bus = <&i2c5>;
 	status = "okay";
 };
 
