@@ -424,6 +424,22 @@ static const struct drm_panel_funcs panel_jdi_funcs = {
 	.get_modes = panel_jdi_get_modes,
 };
 
+static int panic_reset_gpio;
+static int panic_reset_level;
+static int panel_jdi_panic(struct notifier_block *n, unsigned long ununsed,
+			   void *panic_str)
+{
+	/* assume the GPIO control is not sleeping (e.g. no I2C) */
+	gpio_set_value(panic_reset_gpio, panic_reset_level);
+	mdelay(16);
+
+	return 0;
+}
+
+static struct notifier_block paniced = {
+	.notifier_call = panel_jdi_panic,
+};
+
 static const struct of_device_id jdi_of_match[] = {
 	{ .compatible = "jdi,lpm102a188a", },
 	{ }
@@ -521,6 +537,11 @@ static int panel_jdi_setup_primary(struct mipi_dsi_device *dsi,
 		return ret;
 	}
 
+	/* ensure we put the panel under reset on panic */
+	panic_reset_gpio = jdi->reset_gpio;
+	panic_reset_level = (jdi->reset_gpio_flags & GPIO_ACTIVE_LOW) ? 0 : 1;
+	atomic_notifier_chain_register(&panic_notifier_list, &paniced);
+
 	panel_jdi_debugfs_init(jdi);
 
 	return 0;
@@ -558,6 +579,8 @@ static int panel_jdi_dsi_remove(struct mipi_dsi_device *dsi)
 	/* nothing to do for the secondary interface */
 	if (!jdi)
 		return 0;
+
+	atomic_notifier_chain_unregister(&panic_notifier_list, &paniced);
 
 	panel_jdi_disable(&jdi->base);
 
