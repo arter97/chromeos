@@ -2812,11 +2812,6 @@ static int rt5645_jack_detect(struct snd_soc_codec *codec, int jack_insert)
 					RT5645_PWR_VOL, RT5645_PWR_MIC_DET, 0);
 			rt5645->jack_type = SND_JACK_HEADPHONE;
 		}
-
-		snd_soc_update_bits(codec, RT5645_CHARGE_PUMP, 0x0300, 0x0200);
-		snd_soc_write(codec, RT5645_DEPOP_M1, 0x001d);
-		snd_soc_write(codec, RT5645_DEPOP_M1, 0x0001);
-
 		if (rt5645->pdata.jd_invert)
 			regmap_update_bits(rt5645->regmap, RT5645_IRQ_CTRL2,
 				RT5645_JD_1_1_MASK, RT5645_JD_1_1_INV);
@@ -2870,8 +2865,6 @@ int rt5645_set_jack_detect(struct snd_soc_codec *codec,
 		rt5645->en_button_func = true;
 		regmap_update_bits(rt5645->regmap, RT5645_GPIO_CTRL1,
 				RT5645_GP1_PIN_IRQ, RT5645_GP1_PIN_IRQ);
-		regmap_update_bits(rt5645->regmap, RT5645_DEPOP_M1,
-				RT5645_HP_CB_MASK, RT5645_HP_CB_PU);
 		regmap_update_bits(rt5645->regmap, RT5645_GEN_CTRL1,
 				RT5645_DIG_GATE_CTRL, RT5645_DIG_GATE_CTRL);
 	}
