@@ -33,30 +33,19 @@ struct mmc_ioc_cmd {
 	unsigned int data_timeout_ns;
 	unsigned int cmd_timeout_ms;
 
+	/*
+	 * For 64-bit machines, the next member, ``__u64 data_ptr``, wants to
+	 * be 8-byte aligned.  Make sure this struct is the same size when
+	 * built for 32-bit.
+	 */
+	__u32 __pad;
+
 	/* DAT buffer */
 	__u64 data_ptr;
 };
 #define mmc_ioc_cmd_set_data(ic, ptr) ic.data_ptr = (__u64)(unsigned long) ptr
 
-/**
- * combo command used ioctl cmd id MMC_COMBO_IOC_CMD
- */
-struct mmc_combo_cmd_info {
-	uint8_t  num_of_combo_cmds;
-	__u64 mmc_ioc_cmd_list;  /* struct mmc_ioc_cmd *  */
-};
-
 #define MMC_IOC_CMD _IOWR(MMC_BLOCK_MAJOR, 0, struct mmc_ioc_cmd)
-
-/*
- * MMC_COMBO_IOC_CMD: This is used to send a array of eMMC commands.
- * each entry in struct mmc_ioc_cmd will have details of
- * one eMMC command.
- * The mmc driver will issue all commands in array in sequence to card.
- * To ensure atomic operations of all commands in array,
- * a single lock is acquired.
- */
-#define MMC_COMBO_IOC_CMD _IOWR(MMC_BLOCK_MAJOR, 1, struct mmc_combo_cmd_info)
 
 /*
  * Since this ioctl is only meant to enhance (and not replace) normal access
