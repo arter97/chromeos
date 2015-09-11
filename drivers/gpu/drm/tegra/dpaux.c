@@ -452,41 +452,17 @@ struct drm_dp_aux *drm_dp_aux_find_by_of_node(struct device_node *np)
 	return NULL;
 }
 
-/*
- * Enables a hack which does a DPCD read to check for connected status, rather
- * than relying on the HPD line, which for some reason is busted
- */
-#define TEGRA_DPAUX_DETECT_HACK 1
-
 enum drm_connector_status drm_dp_aux_detect(struct drm_dp_aux *aux)
 {
 	struct tegra_dpaux *dpaux = to_dpaux(aux);
 	u32 value;
 
-#ifdef TEGRA_DPAUX_DETECT_HACK
-	int err;
-	u8 values[16];
-
-	value = tegra_dpaux_readl(dpaux, DPAUX_HYBRID_SPARE);
-
-	/* Always enable since we need to configure PADCTL */
-	drm_dp_aux_enable(aux);
-
-	err = drm_dp_dpcd_read(aux, DP_DPCD_REV, values, sizeof(values));
-
-	if (value & DPAUX_HYBRID_SPARE_PAD_POWER_DOWN)
-		drm_dp_aux_disable(aux);
-
-	if (err < 0)
-		return connector_status_disconnected;
-	return connector_status_connected;
-#else
 	value = tegra_dpaux_readl(dpaux, DPAUX_DP_AUXSTAT);
+
 	if (value & DPAUX_DP_AUXSTAT_HPD_STATUS)
 		return connector_status_connected;
 
 	return connector_status_disconnected;
-#endif
 }
 
 int drm_dp_aux_attach(struct drm_dp_aux *aux, struct tegra_output *output)
