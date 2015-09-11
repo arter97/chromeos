@@ -25,6 +25,12 @@ Optional properties
     Setting this allows dw_hdmi to probe, but it will always be "disconnected",
     even if the HPD pin is left floating.
 
+Optional pinctrl entry:
+- If you have both a "unwedge" and "default" pinctrl entry, dw_hdmi will
+  switch to the unwedge pinctrl state for 10ms if it ever gets an i2c timeout.
+  It's intended that this unwedge pinctrl entry will cause the SDA line to be
+  driven low to work around a hardware errata.
+
 Example:
 	hdmi: hdmi@0120000 {
 		compatible = "fsl,imx6q-hdmi";
