@@ -843,10 +843,6 @@ static void tegra_sor_mode_set(struct tegra_sor *sor,
 		value |= SOR_STATE_ASY_VSYNCPOL;
 
 	switch (info->bpc) {
-	case 10:
-		value |= SOR_STATE_ASY_PIXELDEPTH_BPP_30_444;
-		break;
-
 	case 8:
 		value |= SOR_STATE_ASY_PIXELDEPTH_BPP_24_444;
 		break;
