@@ -21,6 +21,7 @@
 #include <linux/hdmi.h>
 #include <linux/mutex.h>
 #include <linux/of_device.h>
+#include <linux/reset.h>
 
 #include <drm/drm_of.h>
 #include <drm/drmP.h>
@@ -160,6 +161,7 @@ struct dw_hdmi {
 	bool phy_enabled;
 	struct drm_display_mode previous_mode;
 
+	struct reset_control *rst;
 	struct regmap *regmap;
 	struct i2c_adapter *ddc;
 	void __iomem *regs;
@@ -1669,8 +1671,36 @@ static void hdmi_init_interrupts(struct dw_hdmi *hdmi)
 	mutex_unlock(&hdmi->hpd_mutex);
 }
 
+static int hdmi_controller_reset(struct dw_hdmi *hdmi)
+{
+	if (!hdmi->rst)
+		return -EINVAL;
+
+	/*
+	 * The whole chip reset would only cost 256 cycles (10.6us on
+	 * a 24MHz clock), so this delay time would be enough for the
+	 * controller reset.
+	 */
+	reset_control_assert(hdmi->rst);
+	usleep_range(15, 20);
+	reset_control_deassert(hdmi->rst);
+
+	/*
+	 * After the HDMI controller has been reset, interrupt
+	 * registers reset default to mute, so we need to need to
+	 * reconfigure the interrupt, otherwise driver would no
+	 * longer trigger the interrupt again.
+	 */
+	hdmi_init_interrupts(hdmi);
+
+	return 0;
+}
+
 static void dw_hdmi_poweron(struct dw_hdmi *hdmi)
 {
+	/* Resetting a peripheral at plug in time is good practice */
+	hdmi_controller_reset(hdmi);
+
 	dw_hdmi_setup(hdmi, &hdmi->previous_mode);
 }
 
@@ -2039,6 +2069,12 @@ int dw_hdmi_bind(struct device *dev, struct device *master,
 	if (of_find_property(np, "hpd-ignore", NULL)) {
 		dev_info(hdmi->dev, "Ignoring HPD\n");
 		hdmi->hpd_ignore = true;
+	}
+
+	hdmi->rst = devm_reset_control_get(hdmi->dev, "master");
+	if (IS_ERR(hdmi->rst)) {
+		dev_dbg(hdmi->dev, "failed to find reset-controller\n");
+		hdmi->rst = NULL;
 	}
 
 	ret = devm_request_threaded_irq(dev, irq, dw_hdmi_hardirq,

@@ -24,6 +24,9 @@ Optional properties
 - hpd-ignore: ignore HPD pin (for broken boards with unpowered HDMI IO).
     Setting this allows dw_hdmi to probe, but it will always be "disconnected",
     even if the HPD pin is left floating.
+- resets: If present contains an entry for each entry in reset-names.
+	See ../../reset/reset.txt for details.
+- reset-names: "master" will be the master reset for the HDMI controller.
 
 Example:
 	hdmi: hdmi@0120000 {
