@@ -373,6 +373,7 @@ struct v4l2_fh;
  * @start_streaming_called: start_streaming() was called successfully and we
  *		started streaming.
  * @fileio:	file io emulator internal data, used only if emulator is active
+ * @dma_dir:	DMA direction to use for buffers on this queue
  */
 struct vb2_queue {
 	enum v4l2_buf_type		type;
@@ -413,6 +414,7 @@ struct vb2_queue {
 	unsigned int			start_streaming_called:1;
 
 	struct vb2_fileio_data		*fileio;
+	enum dma_data_direction		dma_dir;
 
 #ifdef CONFIG_VIDEO_ADV_DEBUG
 	/*
