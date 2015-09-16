@@ -640,6 +640,7 @@ imx208_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	struct imx208_info *info;
 	struct imx208_power_rail *pw;
 	int err;
+	u8 module_id[2];
 
 	dev_info(&client->dev, "[IMX208]: probing sensor.\n");
 
@@ -697,10 +698,26 @@ imx208_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 	i2c_set_clientdata(client, info);
 	info->powered_on = false;
+
+	err = imx208_power_on(pw);
+	if (err)
+		return err;
+
+	err = imx208_read_reg(info, 0x0000, &module_id[0]);
+	err |= imx208_read_reg(info, 0x0001, &module_id[1]);
+	if (!err && (module_id[0] != 0x02 || module_id[1] != 0x08))
+		err = -ENODEV;
+
+	err |= imx208_power_off(pw);
+        if (err) {
+		dev_err(&client->dev, "%s:Module ID check failed", __func__);
+		return err;
+	}
+
 	info->miscdev_info = imx208_device;
 	err = misc_register(&info->miscdev_info);
 	if (err) {
-		dev_err(&info->i2c_client->dev,
+		dev_err(&client->dev,
 			"%s:Unable to register misc device!\n", __func__);
 		return err;
 	}

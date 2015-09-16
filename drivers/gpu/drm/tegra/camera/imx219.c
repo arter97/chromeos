@@ -664,6 +664,7 @@ imx219_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	struct device_node *np = client->dev.of_node;
 	struct imx219_power_rail *pw = NULL;
 	int err = 0;
+	u8 module_id[2];
 
 	dev_info(&client->dev, "[IMX219]: probing sensor.\n");
 
@@ -722,6 +723,22 @@ imx219_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 	info->miscdev_info = imx219_device;
 	i2c_set_clientdata(client, info);
+
+	err = imx219_power_on(info);
+	if (err)
+		return err;
+
+	err = imx219_read_reg(info->i2c_client, 0x0000, &module_id[0]);
+	err |= imx219_read_reg(info->i2c_client, 0x0001, &module_id[1]);
+	if (!err && (module_id[0] != 0x02 || module_id[1] != 0x19))
+		err = -EINVAL;
+
+	err |= imx219_power_off(info);
+        if (err) {
+		dev_err(&client->dev, "%s: Mismatch module ID", __func__);
+		return err;
+	}
+
 	err = misc_register(&info->miscdev_info);
 	if (err) {
 		dev_err(&info->i2c_client->dev,
