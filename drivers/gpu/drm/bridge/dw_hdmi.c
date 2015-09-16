@@ -1642,7 +1642,7 @@ static void hdmi_mute_interrupts(struct dw_hdmi *hdmi)
 	hdmi_writeb(hdmi, ih_mute, HDMI_IH_MUTE);
 }
 
-static void hdmi_unmute_interrupts(struct dw_hdmi *hdmi)
+static void hdmi_init_interrupts(struct dw_hdmi *hdmi)
 {
 	initialize_hdmi_ih_mutes(hdmi);
 
@@ -2114,7 +2114,7 @@ int dw_hdmi_bind(struct device *dev, struct device *master,
 	if (ret)
 		goto err_iahb;
 
-	hdmi_unmute_interrupts(hdmi);
+	hdmi_init_interrupts(hdmi);
 
 	dev_set_drvdata(dev, hdmi);
 
@@ -2201,7 +2201,7 @@ int dw_hdmi_resume(struct device *dev)
 	if (!hdmi)
 		return 0;
 
-	hdmi_unmute_interrupts(hdmi);
+	hdmi_init_interrupts(hdmi);
 
 	return 0;
 }
