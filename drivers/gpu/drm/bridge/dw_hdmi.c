@@ -170,6 +170,10 @@ struct dw_hdmi {
 	struct mutex audio_mutex;
 	bool audio_enable;
 
+	/* this mutex protects HPD config; used in threaded IRQ handler */
+	struct mutex hpd_mutex;
+	bool plugged;
+
 	void (*write)(struct dw_hdmi *hdmi, u8 val, int offset);
 	u8 (*read)(struct dw_hdmi *hdmi, int offset);
 };
@@ -1649,13 +1653,20 @@ static void hdmi_unmute_interrupts(struct dw_hdmi *hdmi)
 		    HDMI_PHY_I2CM_CTLINT_ADDR_ARBITRATION_POL,
 		    HDMI_PHY_I2CM_CTLINT_ADDR);
 
-	/* Re-init HPD polarity */
-	hdmi_writeb(hdmi, HDMI_PHY_HPD, HDMI_PHY_POL0);
+	mutex_lock(&hdmi->hpd_mutex);
+
+	/* Make sure HPD polarity matches how we think the cable is inserted */
+	if (!hdmi->plugged)
+		hdmi_writeb(hdmi, HDMI_PHY_HPD, HDMI_PHY_POL0);
+	else
+		hdmi_writeb(hdmi, 0, HDMI_PHY_POL0);
 
 	/* Unmask HPD, clear transitory interrupts, then unmute */
 	hdmi_writeb(hdmi, (u8)~HDMI_PHY_HPD, HDMI_PHY_MASK0);
 	hdmi_writeb(hdmi, HDMI_IH_PHY_STAT0_HPD, HDMI_IH_PHY_STAT0);
 	hdmi_writeb(hdmi, ~HDMI_IH_PHY_STAT0_HPD, HDMI_IH_MUTE_PHY_STAT0);
+
+	mutex_unlock(&hdmi->hpd_mutex);
 }
 
 static void dw_hdmi_poweron(struct dw_hdmi *hdmi)
@@ -1843,6 +1854,18 @@ static irqreturn_t dw_hdmi_hardirq(int irq, void *dev_id)
 
 	intr_stat = hdmi_readb(hdmi, HDMI_IH_PHY_STAT0);
 	if (intr_stat) {
+		/*
+		 * We don't protect the mute register though there are possible
+		 * races with other people setting this.  There should be no
+		 * problem because:
+		 * - It's an 8-bit write, so impossible for it to not be atomic.
+		 * - This is the only place we mute and we'll return
+		 *   IRQ_WAKE_THREAD here, so we're guaranteed to run our
+		 *   threaded interrupt handler later and unmute.  If the thread
+		 *   is already running when we're here it will run again.
+		 * - If some other call unmutes, worst case is that we'll just
+		 *   end up right back here and mute again.
+		 */
 		hdmi_writeb(hdmi, ~0, HDMI_IH_MUTE_PHY_STAT0);
 		return IRQ_WAKE_THREAD;
 	}
@@ -1858,13 +1881,36 @@ static irqreturn_t dw_hdmi_irq(int irq, void *dev_id)
 
 	intr_stat = hdmi_readb(hdmi, HDMI_IH_PHY_STAT0);
 
-	phy_int_pol = hdmi_readb(hdmi, HDMI_PHY_POL0);
-
+	/*
+	 * Handle HPD signal.  HPD is level-sensitive and latched, so:
+	 * - If we were looking for plugs and there was a plug/unplug, we'll
+	 *   see an interrupt (for the plug).  If we change polarity and try
+	 *   to clear the interrupt it will come right back.
+	 * - If we were looking for plugs and there was a plug (and no unplug)
+	 *   and we try to clear the interrupt before changing the polarity, it
+	 *   will just come back.
+	 *
+	 * To make sure we don't lose anything, we always clear the interrupt
+	 * right after changing the polarity to catch the other edge but before
+	 * processing it.
+	 */
 	if (intr_stat & HDMI_IH_PHY_STAT0_HPD) {
+		/*
+		 * We always want to keep HPD polarity and "plugged" concept in
+		 * sync so grab the mutex around this whole chunk.
+		 */
+		mutex_lock(&hdmi->hpd_mutex);
+
+		phy_int_pol = hdmi_readb(hdmi, HDMI_PHY_POL0);
 		if (phy_int_pol & HDMI_PHY_HPD) {
 			dev_dbg(hdmi->dev, "EVENT=plugin\n");
 
 			hdmi_modb(hdmi, 0, HDMI_PHY_HPD, HDMI_PHY_POL0);
+			hdmi_writeb(hdmi, HDMI_IH_PHY_STAT0_HPD,
+				    HDMI_IH_PHY_STAT0);
+			hdmi->plugged = true;
+
+			mutex_unlock(&hdmi->hpd_mutex);
 
 			dw_hdmi_poweron(hdmi);
 		} else {
@@ -1872,13 +1918,27 @@ static irqreturn_t dw_hdmi_irq(int irq, void *dev_id)
 
 			hdmi_modb(hdmi, HDMI_PHY_HPD, HDMI_PHY_HPD,
 				  HDMI_PHY_POL0);
+			hdmi_writeb(hdmi, HDMI_IH_PHY_STAT0_HPD,
+				    HDMI_IH_PHY_STAT0);
+			hdmi->plugged = false;
+
+			mutex_unlock(&hdmi->hpd_mutex);
 
 			dw_hdmi_poweroff(hdmi);
 		}
+
 		drm_helper_hpd_irq_event(hdmi->connector.dev);
+		intr_stat &= ~HDMI_IH_PHY_STAT0_HPD;
 	}
 
-	hdmi_writeb(hdmi, intr_stat, HDMI_IH_PHY_STAT0);
+	/*
+	 * Clear any other interrupts just to be nice.  They should always
+	 * be muted anyway, though.
+	 */
+	if (intr_stat)
+		hdmi_writeb(hdmi, intr_stat, HDMI_IH_PHY_STAT0);
+
+	/* Unmute HPD */
 	hdmi_writeb(hdmi, ~HDMI_IH_PHY_STAT0_HPD, HDMI_IH_MUTE_PHY_STAT0);
 
 	return IRQ_HANDLED;
@@ -1945,6 +2005,7 @@ int dw_hdmi_bind(struct device *dev, struct device *master,
 	hdmi->encoder = encoder;
 	hdmi->audio_enable = false;
 	mutex_init(&hdmi->audio_mutex);
+	mutex_init(&hdmi->hpd_mutex);
 
 	of_property_read_u32(np, "reg-io-width", &val);
 
