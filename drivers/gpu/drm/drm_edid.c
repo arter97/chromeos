@@ -74,6 +74,8 @@
 #define EDID_QUIRK_ADD_DOWNCLOCK_MODE           (1 << 9)
 /* The panel can reduce consumption with shorter blanking intervals */
 #define EDID_QUIRK_SHORT_BLANKING               (1 << 10)
+/* Force 6bpc */
+#define EDID_QUIRK_FORCE_6BPC			(1 << 11)
 
 
 struct detailed_mode_closure {
@@ -150,6 +152,9 @@ static struct edid_quirk {
 	{ "CMN", 0x1132, EDID_QUIRK_SHORT_BLANKING },
 	/* CMN N116BGE-EB2 */
 	{ "CMN", 0x4400, EDID_QUIRK_SHORT_BLANKING },
+
+	/* HACK - for samus - LG */
+	{ "LGD", 0x042e, EDID_QUIRK_FORCE_6BPC },
 };
 
 static struct downclock_rate {
@@ -3642,6 +3647,11 @@ int drm_add_edid_modes(struct drm_connector *connector, struct edid *edid)
 
 	if (quirks & EDID_QUIRK_FORCE_8BPC)
 		connector->display_info.bpc = 8;
+	if (quirks & EDID_QUIRK_FORCE_6BPC) {
+		DRM_DEBUG_KMS("%s: forcing 6bpc\n",
+			      drm_get_connector_name(connector));
+		connector->display_info.bpc = 6;
+	}
 
 	return num_modes;
 }
