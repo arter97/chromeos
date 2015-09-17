@@ -38,6 +38,7 @@
 #define EFUSE_BUF_SIZE			32
 #define EFUSE_CHIP_VERSION_OFFSET	6
 #define EFUSE_CHIP_VERSION_MASK		0xf
+#define EFUSE_CHIP_UID_OFFSET		7
 #define EFUSE_BUF_LKG_CPU		23
 
 struct rk_efuse_info {
@@ -78,6 +79,22 @@ int rockchip_efuse_get_cpuleakage(struct platform_device *pdev,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(rockchip_efuse_get_cpuleakage);
+
+int rockchip_efuse_get_uid(struct platform_device *pdev, char *buf)
+{
+	struct rk_efuse_info *rk_efuse;
+	int i;
+
+	rk_efuse = platform_get_drvdata(pdev);
+	if (!rk_efuse)
+		return -EAGAIN;
+
+	for (i = 0; i < EFUSE_CHIP_UID_LEN; i++)
+		buf[i] = (char) rk_efuse->buf[EFUSE_CHIP_UID_OFFSET + i];
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(rockchip_efuse_get_uid);
 
 int rockchip_efuse_get_chip_version(struct platform_device *pdev,
 				    unsigned int *value)
@@ -123,6 +140,23 @@ static ssize_t cpu_version_show(struct device *dev,
 	return sprintf(buf, "%d\n", version);
 }
 
+static ssize_t cpu_uid_show(struct device *dev,
+			    struct device_attribute *attr, char *buf)
+{
+	char uid[EFUSE_CHIP_UID_LEN];
+	int ret;
+	struct platform_device *pdev = to_platform_device(dev);
+
+	ret = rockchip_efuse_get_uid(pdev, uid);
+	if (ret)
+		return ret;
+
+	hex_dump_to_buffer(uid, EFUSE_CHIP_UID_LEN, 16, 1,
+			   buf, PAGE_SIZE, false);
+
+	return strlen(buf);
+}
+
 static void rockchip_efuse_init(struct rk_efuse_info *efuse)
 {
 	int start;
@@ -155,10 +189,12 @@ static void rockchip_efuse_init(struct rk_efuse_info *efuse)
 
 static DEVICE_ATTR(cpu_leakage_show, 0444, cpu_leakage_show, NULL);
 static DEVICE_ATTR(cpu_version_show, 0444, cpu_version_show, NULL);
+static DEVICE_ATTR(cpu_uid_show, 0444, cpu_uid_show, NULL);
 
 static struct attribute *efuse_attributes[] = {
 	&dev_attr_cpu_leakage_show.attr,
 	&dev_attr_cpu_version_show.attr,
+	&dev_attr_cpu_uid_show.attr,
 	NULL,
 };
 
