@@ -743,6 +743,7 @@
 		reg = <0xff980000 0x20000>;
 		reg-io-width = <4>;
 		rockchip,grf = <&grf>;
+		rockchip,efuse = <&efuse>;
 		resets = <&cru SRST_HDMI>;
 		reset-names = "master";
 		interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
