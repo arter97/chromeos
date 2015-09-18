@@ -193,6 +193,10 @@
 	hpd-ignore;
 };
 
+&hdmi_audio {
+	status = "disabled";
+};
+
 &pinctrl {
 	pinctrl-0 = <
 		/* Common for sleep and wake, but no owners */
