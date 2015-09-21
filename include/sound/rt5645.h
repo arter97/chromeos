@@ -24,6 +24,8 @@ struct rt5645_platform_data {
 	bool gpio_hp_det_active_high;
 
 	unsigned int jd_mode;
+	/* Invert JD when jack insert */
+	bool jd_invert;
 };
 
 #endif
