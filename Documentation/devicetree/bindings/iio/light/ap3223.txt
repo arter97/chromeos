@@ -1,0 +1,18 @@
+* Dyna Image AP3223 ambient light sensor and proximity sensor
+
+http://www.dyna-image.com/english/product/optical-sensor-detail.php?cpid=2&dpid=8
+
+Required properties:
+
+  - compatible : should be "dynaimage,ap3223"
+  - reg : the I2C address of the sensor
+
+Example:
+
+ap3223@1c {
+	compatible = "dynaimage,ap3223";
+	reg = <0x1c>;
+
+	pinctrl-0 = <&ap3223_pins>;
+	pinctrl-names = "default";
+};
