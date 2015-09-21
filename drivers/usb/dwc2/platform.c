@@ -335,9 +335,6 @@ static bool __maybe_unused dwc2_can_poweroff_phy(struct dwc2_hsotg *dwc2)
 {
 	struct usb_device *root_hub = dwc2_hsotg_to_hcd(dwc2)->self.root_hub;
 
-	if (dwc2->lx_state == DWC2_L0)
-		return false;
-
 	/* If the controller isn't allowed to wakeup then we can power off. */
 	if (!device_may_wakeup(dwc2->dev))
 		return true;
