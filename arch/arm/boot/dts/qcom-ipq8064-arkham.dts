@@ -77,12 +77,6 @@
 				};
 			};
 
-			ap3223_pins: ap3223_pinmux {
-				pins = "gpio22";
-				function = "gpio";
-				bias-none;
-			};
-
 			sdmode_pins: sdmode_pinmux {
 				pins = "gpio25";
 				function = "gpio";
@@ -363,16 +357,6 @@
 
 				pinctrl-0 = <&i2c7_pins>;
 				pinctrl-names = "default";
-
-				ap3223@1c {
-					compatible = "dynaimage,ap3223";
-					reg = <0x1c>;
-
-					pinctrl-0 = <&ap3223_pins>;
-					pinctrl-names = "default";
-
-					int-gpio = <&qcom_pinmux 22 1>;
-				};
 
 				lp55231@32 {
 					compatible = "national,lp5523";
