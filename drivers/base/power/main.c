@@ -193,14 +193,14 @@ void device_pm_move_last(struct device *dev)
 	list_move_tail(&dev->power.entry, &dpm_list);
 }
 
-static ktime_t initcall_debug_start(struct device *dev)
+static ktime_t initcall_debug_start(struct device *dev, void *cb)
 {
 	ktime_t calltime = ktime_set(0, 0);
 
 	if (pm_print_times_enabled) {
-		pr_info("calling  %s+ @ %i, parent: %s\n",
+		pr_info("calling  %s+ @ %i, parent: %s, cb: %pf\n",
 			dev_name(dev), task_pid_nr(current),
-			dev->parent ? dev_name(dev->parent) : "none");
+			dev->parent ? dev_name(dev->parent) : "none", cb);
 		calltime = ktime_get();
 	}
 
@@ -390,7 +390,7 @@ static int dpm_run_callback(pm_callback_t cb, struct device *dev,
 	if (!cb)
 		return 0;
 
-	calltime = initcall_debug_start(dev);
+	calltime = initcall_debug_start(dev, cb);
 
 	pm_dev_dbg(dev, state, info);
 	error = cb(dev);
@@ -1151,7 +1151,7 @@ static int legacy_suspend(struct device *dev, pm_message_t state,
 	int error;
 	ktime_t calltime;
 
-	calltime = initcall_debug_start(dev);
+	calltime = initcall_debug_start(dev, cb);
 
 	error = cb(dev, state);
 	suspend_report_result(cb, error);
