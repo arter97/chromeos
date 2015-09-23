@@ -179,6 +179,7 @@ struct dw_hdmi {
 	struct mutex hpd_mutex;
 	bool plugged;
 
+	spinlock_t reg_lock;
 	void (*write)(struct dw_hdmi *hdmi, u8 val, int offset);
 	u8 (*read)(struct dw_hdmi *hdmi, int offset);
 };
@@ -205,7 +206,11 @@ static u8 dw_hdmi_readb(struct dw_hdmi *hdmi, int offset)
 
 static inline void hdmi_writeb(struct dw_hdmi *hdmi, u8 val, int offset)
 {
+	unsigned long flags;
+
+	spin_lock_irqsave(&hdmi->reg_lock, flags);
 	hdmi->write(hdmi, val, offset);
+	spin_unlock_irqrestore(&hdmi->reg_lock, flags);
 }
 
 static inline u8 hdmi_readb(struct dw_hdmi *hdmi, int offset)
@@ -215,10 +220,14 @@ static inline u8 hdmi_readb(struct dw_hdmi *hdmi, int offset)
 
 static void hdmi_modb(struct dw_hdmi *hdmi, u8 data, u8 mask, unsigned reg)
 {
-	u8 val = hdmi_readb(hdmi, reg) & ~mask;
+	unsigned long flags;
+	u8 val;
 
+	spin_lock_irqsave(&hdmi->reg_lock, flags);
+	val = hdmi_readb(hdmi, reg) & ~mask;
 	val |= data & mask;
-	hdmi_writeb(hdmi, val, reg);
+	hdmi->write(hdmi, val, reg);
+	spin_unlock_irqrestore(&hdmi->reg_lock, flags);
 }
 
 static void hdmi_mask_writeb(struct dw_hdmi *hdmi, u8 data, unsigned int reg,
@@ -2074,6 +2083,8 @@ int dw_hdmi_bind(struct device *dev, struct device *master,
 	hdmi->audio_enable = false;
 	mutex_init(&hdmi->audio_mutex);
 	mutex_init(&hdmi->hpd_mutex);
+
+	spin_lock_init(&hdmi->reg_lock);
 
 	of_property_read_u32(np, "reg-io-width", &val);
 
