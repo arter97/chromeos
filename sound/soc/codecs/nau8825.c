@@ -776,6 +776,8 @@ static void nau8825_init_regs(struct nau8825 *nau8825)
 		NAU8825_ADC_SYNC_DOWN_MASK, NAU8825_ADC_SYNC_DOWN_128);
 	regmap_update_bits(regmap, NAU8825_REG_DAC_CTRL1,
 		NAU8825_DAC_OVERSAMPLE_MASK, NAU8825_DAC_OVERSAMPLE_128);
+
+	regmap_update_bits(regmap, 0x13, 0xf, 0);
 }
 
 static const struct regmap_config nau8825_regmap_config = {
