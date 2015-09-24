@@ -1660,8 +1660,7 @@ static void intel_edp_psr_enable_sink(struct intel_dp *intel_dp)
 	int precharge = 0x3;
 	int msg_size = 5;       /* Header(4) + Message(1) */
 
-	drm_dp_dpcd_writeb(&intel_dp->aux, DP_PSR_EN_CFG,
-			   DP_PSR_ENABLE | DP_PSR_MAIN_LINK_ACTIVE);
+	drm_dp_dpcd_writeb(&intel_dp->aux, DP_PSR_EN_CFG, DP_PSR_ENABLE);
 
 	/* Setup AUX registers */
 	I915_WRITE(EDP_PSR_AUX_DATA1(dev), EDP_PSR_DPCD_COMMAND);
