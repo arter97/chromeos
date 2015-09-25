@@ -7327,6 +7327,20 @@ static int audio_config_get_n(const struct drm_display_mode *mode, int rate)
 	return 0;
 }
 
+static uint32_t audio_config_setup_n_reg(int n, uint32_t val)
+{
+	int n_low, n_up;
+	uint32_t tmp = val;
+
+	n_low = n & 0xfff;
+	n_up = (n >> 12) & 0xff;
+	tmp &= ~(AUD_CONFIG_UPPER_N_VALUE | AUD_CONFIG_LOWER_N_VALUE);
+	tmp |= ((n_up << AUD_CONFIG_UPPER_N_SHIFT) |
+			(n_low << AUD_CONFIG_LOWER_N_SHIFT) |
+			AUD_CONFIG_N_PROG_ENABLE);
+	return tmp;
+}
+
 /* check whether N/CTS/M need be set manually */
 static bool audio_rate_need_prog(struct intel_crtc *crtc,
 				 struct drm_display_mode *mode)
@@ -7420,7 +7434,12 @@ static void haswell_write_eld(struct drm_connector *connector,
 	uint32_t i;
 	int len;
 	int pipe = to_intel_crtc(crtc)->pipe;
+	struct intel_encoder *intel_encoder = intel_attached_encoder(connector);
+	struct intel_digital_port *intel_dig_port =
+		enc_to_dig_port(&intel_encoder->base);
+	enum port port = intel_dig_port->port;
 	int tmp;
+	int n, rate;
 
 	int hdmiw_hdmiedid = HSW_AUD_EDID_DATA(pipe);
 	int aud_cntl_st = HSW_AUD_DIP_ELD_CTRL(pipe);
@@ -7453,8 +7472,7 @@ static void haswell_write_eld(struct drm_connector *connector,
 	tmp = I915_READ(aud_config);
 	DRM_DEBUG_DRIVER("HDMI audio: audio conf: 0x%08x\n", tmp);
 	/* clear N_programing_enable and N_value_index */
-	tmp &= ~(AUD_CONFIG_N_VALUE_INDEX | AUD_CONFIG_N_PROG_ENABLE);
-	I915_WRITE(aud_config, tmp);
+	tmp &= ~AUD_CONFIG_N_VALUE_INDEX;
 
 	DRM_DEBUG_DRIVER("ELD on pipe %c\n", pipe_name(pipe));
 
@@ -7464,10 +7482,27 @@ static void haswell_write_eld(struct drm_connector *connector,
 	if (intel_pipe_has_type(crtc, INTEL_OUTPUT_DISPLAYPORT)) {
 		DRM_DEBUG_DRIVER("ELD: DisplayPort detected\n");
 		eld[5] |= (1 << 2);	/* Conn_Type, 0x1 = DisplayPort */
-		I915_WRITE(aud_config, AUD_CONFIG_N_VALUE_INDEX); /* 0x1 = DP */
+		tmp |= AUD_CONFIG_N_VALUE_INDEX; /* 0x1 = DP */
 	} else {
-		I915_WRITE(aud_config, audio_config_hdmi_pixel_clock(mode));
+		tmp |= audio_config_hdmi_pixel_clock(mode);
 	}
+
+	tmp &= ~AUD_CONFIG_N_PROG_ENABLE;
+	if (audio_rate_need_prog(intel_crtc, mode)) {
+		if (port >= PORT_A && port <= PORT_E)
+			rate = dev_priv->aud_sample_rate[port];
+		else {
+			DRM_ERROR("invalid port: %d\n", port);
+			rate = 0;
+		}
+		n = audio_config_get_n(mode, rate);
+		if (n != 0)
+			tmp = audio_config_setup_n_reg(n, tmp);
+		else
+			DRM_DEBUG_KMS("no suitable N value is found\n");
+	}
+
+	I915_WRITE(aud_config, tmp);
 
 	mutex_unlock(&dev_priv->av_mutex);
 
@@ -7628,7 +7663,7 @@ int i915_audio_component_sync_audio_rate(struct drm_i915_private *dev_priv,
 	struct drm_display_mode *mode;
 	enum pipe pipe = -1;
 	u32 tmp;
-	int n_low, n_up, n;
+	int n;
 
 	/* HSW, BDW need this fix */
 	if (!IS_BROADWELL(drm_dev) &&
@@ -7662,6 +7697,9 @@ int i915_audio_component_sync_audio_rate(struct drm_i915_private *dev_priv,
 					pipe_name(pipe), port_name(port));
 	mode = &crtc->config.adjusted_mode;
 
+	/* port must be valid now, otherwise the pipe will be invalid */
+	dev_priv->aud_sample_rate[port] = rate;
+
 	/* 2. check whether to set the N/CTS/M manually or not */
 	if (!audio_rate_need_prog(crtc, mode)) {
 		tmp = I915_READ(HSW_AUD_CFG(pipe));
@@ -7681,15 +7719,10 @@ int i915_audio_component_sync_audio_rate(struct drm_i915_private *dev_priv,
 		mutex_unlock(&dev_priv->av_mutex);
 		return 0;
 	}
-	n_low = n & 0xfff;
-	n_up = (n >> 12) & 0xff;
 
-	/* 4. set the N/CTS/M */
+	/* 3. set the N/CTS/M */
 	tmp = I915_READ(HSW_AUD_CFG(pipe));
-	tmp &= ~(AUD_CONFIG_UPPER_N_VALUE | AUD_CONFIG_LOWER_N_VALUE);
-	tmp |= ((n_up << AUD_CONFIG_UPPER_N_SHIFT) |
-			(n_low << AUD_CONFIG_LOWER_N_SHIFT) |
-			AUD_CONFIG_N_PROG_ENABLE);
+	tmp = audio_config_setup_n_reg(n, tmp);
 	I915_WRITE(HSW_AUD_CFG(pipe), tmp);
 
 	mutex_unlock(&dev_priv->av_mutex);
@@ -11130,6 +11163,10 @@ static const struct drm_mode_config_funcs intel_mode_funcs = {
 static void intel_init_display(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(dev_priv->aud_sample_rate); i++)
+		dev_priv->aud_sample_rate[i] = 0;
 
 	if (HAS_PCH_SPLIT(dev) || IS_G4X(dev))
 		dev_priv->display.find_dpll = g4x_find_best_dpll;
