@@ -1565,6 +1565,7 @@ static int tegra_dc_program_bandwidth(struct tegra_dc *dc,
 void tegra_dc_update_emc_pre_commit(struct drm_crtc *crtc,
 				    struct drm_crtc_state *old_crtc_state)
 {
+#if 0
 	struct tegra_dc *dc = to_tegra_dc(crtc);
 	struct tegra_dc_state *old_state = to_dc_state(old_crtc_state);
 	struct tegra_dc_state *new_state = to_dc_state(crtc->state);
@@ -1588,10 +1589,12 @@ void tegra_dc_update_emc_pre_commit(struct drm_crtc *crtc,
 		DRM_ERROR("Failed to program emc bandwidth %d\n", ret);
 	else
 		new_state->update_emc = false;
+#endif
 }
 
 void tegra_dc_update_emc_post_commit(struct drm_crtc *crtc)
 {
+#if 0
 	struct tegra_dc *dc = to_tegra_dc(crtc);
 	struct tegra_dc_state *state = to_dc_state(crtc->state);
 	int ret;
@@ -1605,6 +1608,7 @@ void tegra_dc_update_emc_post_commit(struct drm_crtc *crtc)
 		DRM_ERROR("Failed to program emc bandwidth %d\n", ret);
 	else
 		state->update_emc = false;
+#endif
 }
 
 static void tegra_crtc_atomic_flush(struct drm_crtc *crtc)
