@@ -34,6 +34,7 @@
 
 
 #include <linux/bitops.h>
+#include <linux/cpufreq.h>
 #include <linux/init.h>
 #include <linux/list.h>
 #include <linux/slab.h>
@@ -45,6 +46,8 @@
 #include <linux/usb/audio.h>
 #include <linux/usb/audio-v2.h>
 #include <linux/module.h>
+
+#include <soc/rockchip/dmc-sync.h>
 
 #include <sound/control.h>
 #include <sound/core.h>
@@ -616,6 +619,14 @@ static void snd_usb_audio_disconnect(struct usb_device *dev,
 	} else {
 		mutex_unlock(&register_mutex);
 	}
+
+	/*
+	 * when unplug usb audio,
+	 * recovery cpu min frequency,
+	 * and enable dmc
+	 */
+	cpufreq_end_complex_usb();
+	rockchip_dmc_enable();
 }
 
 /*
@@ -625,8 +636,18 @@ static int usb_audio_probe(struct usb_interface *intf,
 			   const struct usb_device_id *id)
 {
 	struct snd_usb_audio *chip;
+
 	chip = snd_usb_audio_probe(interface_to_usbdev(intf), intf, id);
 	if (chip) {
+
+		/*
+		 * when plug in usb audio device,
+		 * set the cpu min frequency define in dts
+		 * disable dmc
+		 */
+		cpufreq_start_complex_usb();
+		rockchip_dmc_disable();
+
 		usb_set_intfdata(intf, chip);
 		return 0;
 	} else
