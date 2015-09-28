@@ -238,11 +238,11 @@ static void hdmi_mask_writeb(struct dw_hdmi *hdmi, u8 data, unsigned int reg,
 
 static void dw_hdmi_i2c_init(struct dw_hdmi *hdmi)
 {
-	/* Software reset */
-	hdmi_writeb(hdmi, 0x00, HDMI_I2CM_SOFTRSTZ);
-
 	/* Set Standard Mode speed */
 	hdmi_writeb(hdmi, 0x03, HDMI_I2CM_DIV);
+
+	/* Software reset */
+	hdmi_writeb(hdmi, 0x00, HDMI_I2CM_SOFTRSTZ);
 
 	/* Set done, not acknowledged and arbitration interrupt polarities */
 	hdmi_writeb(hdmi, HDMI_I2CM_INT_DONE_POL, HDMI_I2CM_INT);
@@ -253,8 +253,9 @@ static void dw_hdmi_i2c_init(struct dw_hdmi *hdmi)
 	hdmi_writeb(hdmi, HDMI_IH_I2CM_STAT0_ERROR | HDMI_IH_I2CM_STAT0_DONE,
 		    HDMI_IH_I2CM_STAT0);
 
-	/* Unmute interrupts */
-	hdmi_writeb(hdmi, 0x00, HDMI_IH_MUTE_I2CM_STAT0);
+	/* Mute DONE and ERROR interrupts */
+	hdmi_writeb(hdmi, HDMI_IH_I2CM_STAT0_ERROR | HDMI_IH_I2CM_STAT0_DONE,
+		    HDMI_IH_MUTE_I2CM_STAT0);
 }
 
 static bool dw_hdmi_i2c_unwedge(struct dw_hdmi *hdmi)
@@ -414,7 +415,7 @@ static int dw_hdmi_i2c_xfer(struct i2c_adapter *adap,
 
 	mutex_lock(&i2c->lock);
 
-	dw_hdmi_i2c_init(hdmi);
+	hdmi_writeb(hdmi, 0x00, HDMI_IH_MUTE_I2CM_STAT0);
 
 	/* Set slave device address taken from the first I2C message */
 	hdmi_writeb(hdmi, addr, HDMI_I2CM_SLAVE);
@@ -2210,6 +2211,10 @@ int dw_hdmi_bind(struct device *dev, struct device *master,
 		goto err_iahb;
 
 	hdmi_init_interrupts(hdmi);
+
+	/* Unmute I2CM interrupts and reset HDMI DDC I2C master controller */
+	if (hdmi->i2c)
+		dw_hdmi_i2c_init(hdmi);
 
 	dev_set_drvdata(dev, hdmi);
 
