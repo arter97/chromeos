@@ -1722,8 +1722,6 @@ static void hdmi_mute_interrupts(struct dw_hdmi *hdmi)
 
 static void hdmi_init_interrupts(struct dw_hdmi *hdmi)
 {
-	initialize_hdmi_ih_mutes(hdmi);
-
 	hdmi_writeb(hdmi, HDMI_PHY_I2CM_INT_ADDR_DONE_POL,
 		    HDMI_PHY_I2CM_INT_ADDR);
 
@@ -2300,6 +2298,12 @@ int dw_hdmi_resume(struct device *dev)
 	 */
 	if (!hdmi)
 		return 0;
+
+	initialize_hdmi_ih_mutes(hdmi);
+
+	/* Unmute I2CM interrupts and reset HDMI DDC I2C master controller */
+	if (hdmi->i2c)
+		dw_hdmi_i2c_init(hdmi);
 
 	hdmi_init_interrupts(hdmi);
 
