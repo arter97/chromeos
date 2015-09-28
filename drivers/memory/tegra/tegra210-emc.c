@@ -129,7 +129,7 @@ static void emc_train(unsigned long nothing);
 static struct timer_list emc_timer_training =
 	TIMER_INITIALIZER(emc_train, 0, 0);
 
-static u8 tegra210_emc_bw_efficiency = 80;
+static u8 tegra210_emc_bw_efficiency = 10;
 static u8 tegra210_emc_iso_share = 100;
 static unsigned long last_iso_bw;
 
