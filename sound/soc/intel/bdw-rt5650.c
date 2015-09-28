@@ -77,14 +77,15 @@ static int broadwell_ssp0_fixup(struct snd_soc_pcm_runtime *rtd,
 	struct snd_interval *channels = hw_param_interval(params,
 						SNDRV_PCM_HW_PARAM_CHANNELS);
 
-	/* The ADSP will covert the FE rate to 48k, stereo */
+	/* The ADSP will covert the FE rate to 48k, max 4-channels */
 	rate->min = rate->max = 48000;
-	channels->min = channels->max = 2;
+	channels->min = 2;
+	channels->max = 4;
 
-	/* set SSP0 to 16 bit */
+	/* set SSP0 to 24 bit */
 	snd_mask_set(&params->masks[SNDRV_PCM_HW_PARAM_FORMAT -
 				    SNDRV_PCM_HW_PARAM_FIRST_MASK],
-				    SNDRV_PCM_FORMAT_S16_LE);
+				    SNDRV_PCM_FORMAT_S24_LE);
 	return 0;
 }
 
@@ -119,10 +120,12 @@ static int bdw_rt5650_rtd_init(struct snd_soc_pcm_runtime *rtd)
 	struct sst_hsw *broadwell = pdata->dsp;
 	int ret;
 
-	/* Set ADSP SSP port settings */
+	/* Set ADSP SSP port settings
+	 * clock_divider = 4 means BCLK = MCLK/5 = 24MHz/5 = 4.8MHz
+	 */
 	ret = sst_hsw_device_set_config(broadwell, SST_HSW_DEVICE_SSP_0,
 		SST_HSW_DEVICE_MCLK_FREQ_24_MHZ,
-		SST_HSW_DEVICE_CLOCK_MASTER, 9);
+		SST_HSW_DEVICE_TDM_CLOCK_MASTER, 4);
 	if (ret < 0) {
 		dev_err(rtd->dev, "error: failed to set device config\n");
 		return ret;
@@ -136,6 +139,8 @@ static int bdw_rt5650_init(struct snd_soc_pcm_runtime *rtd)
 	struct bdw_rt5650_priv *bdw_rt5650 =
 			snd_soc_card_get_drvdata(rtd->card);
 	struct snd_soc_codec *codec = rtd->codec;
+	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+	int ret;
 
 	/* Enable codec ASRC function for Stereo DAC/Stereo1 ADC/DMIC/I2S1.
 	 * The ASRC clock source is clk_i2s1_asrc.
@@ -144,8 +149,18 @@ static int bdw_rt5650_init(struct snd_soc_pcm_runtime *rtd)
 				RT5645_DA_STEREO_FILTER |
 				RT5645_DA_MONO_L_FILTER |
 				RT5645_DA_MONO_R_FILTER |
-				RT5645_AD_STEREO_FILTER,
+				RT5645_AD_STEREO_FILTER |
+				RT5645_AD_MONO_L_FILTER |
+				RT5645_AD_MONO_R_FILTER,
 				RT5645_CLK_SEL_I2S1_ASRC);
+
+	/* TDM 4 slots 24 bit, set Rx & Tx bitmask to 4 active slots */
+	ret = snd_soc_dai_set_tdm_slot(codec_dai, 0xF, 0xF, 4, 24);
+
+	if (ret < 0) {
+		dev_err(rtd->dev, "can't set codec TDM slot %d\n", ret);
+		return ret;
+	}
 
 	/* Create and initialize headphone jack */
 	if (snd_soc_jack_new(codec, "Headphone Jack", SND_JACK_HEADPHONE,
@@ -209,7 +224,7 @@ static struct snd_soc_dai_link bdw_rt5650_dais[] = {
 		.no_pcm = 1,
 		.codec_name = "i2c-10EC5650:00",
 		.codec_dai_name = "rt5645-aif1",
-		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
+		.dai_fmt = SND_SOC_DAIFMT_DSP_B | SND_SOC_DAIFMT_NB_NF |
 			SND_SOC_DAIFMT_CBS_CFS,
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
