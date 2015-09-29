@@ -2113,11 +2113,15 @@ static void dw_hdmi_set_content_protection(struct dw_hdmi *hdmi,
 		break;
 
 	case DRM_MODE_CONTENT_PROTECTION_DESIRED:
+		/*
+		 * Start auth over even if at DW_HDMI_HDCP_STATE_AUTH_DONE
+		 * since we need the interrupt where we'll set
+		 * DRM_MODE_CONTENT_PROTECTION_ENABLED.  We don't wan to set
+		 * it here because we'd need to grab the mode_config mutex and
+		 * that could lead to deadlock.
+		 */
 		mutex_lock(&hdmi->hdcp_state_mutex);
-		if (hdmi->hdcp_state == DW_HDMI_HDCP_STATE_AUTH_DONE)
-			_hdmi_enable_hdcp_encry(hdmi);
-		else
-			_hdmi_start_hdcp_auth(hdmi);
+		_hdmi_start_hdcp_auth(hdmi);
 		mutex_unlock(&hdmi->hdcp_state_mutex);
 
 		break;
