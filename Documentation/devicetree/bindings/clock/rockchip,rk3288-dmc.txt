@@ -50,6 +50,9 @@ Required properties:
       rockchip,trcd: tRCD,AC timing parameters from the memory data-sheet
       rockchip,trp: tRP,AC timing parameters from the memory data-sheet
 
+Optional properties:
+- rockchip,dmc-disable-freq: set ddr frequency to dmc-disable-freq when disable dmc
+
 Example:
 	dmc: dmc@ff610000 {
 		compatible = "rockchip,rk3288-dmc", "syscon";
@@ -83,4 +86,5 @@ Example:
 			rockchip,trcd = <10>;
 			rockchip,trp = <10>;
 		};
+		rockchip,dmc-disable-freq = <433000000>;
 	};
