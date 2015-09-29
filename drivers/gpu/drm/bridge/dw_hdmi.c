@@ -1942,8 +1942,9 @@ static void hdmi_init_interrupts(struct dw_hdmi *hdmi)
 
 	mutex_unlock(&hdmi->hpd_mutex);
 
-	/* Unmask HDCP interrupts */
-	hdmi_writeb(hdmi, 0, HDMI_A_APIINTMSK);
+	/* Unmask HDCP engaged interrupt */
+	hdmi_writeb(hdmi, (u8)~HDMI_A_APIINTSTAT_HDCP_ENGAGED,
+		    HDMI_A_APIINTMSK);
 }
 
 static void dw_hdmi_poweron(struct dw_hdmi *hdmi)
@@ -2225,7 +2226,7 @@ static irqreturn_t dw_hdmi_hardirq(int irq, void *dev_id)
 	 */
 
 	hdcp_stat = hdmi_readb(hdmi, HDMI_A_APIINTSTAT);
-	if (hdcp_stat) {
+	if (hdcp_stat & HDMI_A_APIINTSTAT_HDCP_ENGAGED) {
 		hdmi_writeb(hdmi, ~0, HDMI_A_APIINTMSK);
 		ret = IRQ_WAKE_THREAD;
 	}
@@ -2326,13 +2327,14 @@ static irqreturn_t dw_hdmi_irq(int irq, void *dev_id)
 	}
 
 	if (hdcp_stat) {
-		dev_warn(hdmi->dev, "Unexpected HDCP irq %#x\n", hdcp_stat);
+		dev_dbg(hdmi->dev, "Unexpected HDCP irq %#x\n", hdcp_stat);
 		hdmi_writeb(hdmi, hdcp_stat, HDMI_A_APIINTCLR);
 	}
 
 	/* Unmute/unmask interrupts */
 	hdmi_writeb(hdmi, ~HDMI_IH_PHY_STAT0_HPD, HDMI_IH_MUTE_PHY_STAT0);
-	hdmi_writeb(hdmi, 0, HDMI_A_APIINTMSK);
+	hdmi_writeb(hdmi, (u8)~HDMI_A_APIINTSTAT_HDCP_ENGAGED,
+		    HDMI_A_APIINTMSK);
 
 	return IRQ_HANDLED;
 }
