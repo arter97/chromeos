@@ -171,6 +171,7 @@
 
 &cpu0 {
 	cpu0-supply = <&vdd_cpu>;
+	complex-usb-min-frequency = <1200000>;
 };
 
 &dmc {
