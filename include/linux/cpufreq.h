@@ -101,6 +101,10 @@ struct cpufreq_policy {
 	 *     __cpufreq_governor(data, CPUFREQ_GOV_POLICY_EXIT);
 	 */
 	struct rw_semaphore	rwsem;
+
+	unsigned int complexusb_cnt; /* complex usb device refcount */
+	unsigned int complexusb_minfreq; /* in Khz, when plug complex usb
+					  * device, cpu min frequency value */
 };
 
 /* Only for ACPI */
@@ -159,6 +163,13 @@ static inline unsigned int cpufreq_quick_get_max(unsigned int cpu)
 static inline void disable_cpufreq(void) { }
 #endif
 
+#ifdef CONFIG_CPU_FREQ
+void cpufreq_start_complex_usb(void);
+void cpufreq_end_complex_usb(void);
+#else
+static inline void cpufreq_start_complex_usb(void) { }
+static inline void cpufreq_end_complex_usb(void) { }
+#endif
 /*********************************************************************
  *                      CPUFREQ DRIVER INTERFACE                     *
  *********************************************************************/
