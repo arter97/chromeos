@@ -360,6 +360,10 @@ nvkm_vm_unmap_pgt(struct nvkm_vm *vm, int big, u32 fpde, u32 lpde)
 		nvkm_gpuobj_ref(NULL, &pgt);
 		mutex_lock(&nv_subdev(mmu)->mutex);
 	}
+
+	mutex_unlock(&nv_subdev(mmu)->mutex);
+	mmu->flush(vm);
+	mutex_lock(&nv_subdev(mmu)->mutex);
 }
 
 static int
