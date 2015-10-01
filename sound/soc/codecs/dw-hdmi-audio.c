@@ -39,22 +39,19 @@ struct snd_dw_hdmi {
 	struct dw_hdmi_audio_data data;
 
 	u8 jack_status;
-	bool is_jack_ready;
 	struct snd_soc_jack jack;
 
 	bool is_playback_status;
 	struct hdmi_audio_fmt fmt;
 };
 
-int snd_dw_hdmi_jack_detect(struct snd_dw_hdmi *hdmi)
+static void snd_dw_hdmi_plugged(struct platform_device *audio_pdev,
+				bool plugged)
 {
+	struct snd_dw_hdmi *hdmi = platform_get_drvdata(audio_pdev);
 	u8 jack_status;
 
-	if (!hdmi->is_jack_ready)
-		return -EINVAL;
-
-	jack_status = !!(hdmi->data.read(hdmi->data.dw, HDMI_PHY_STAT0)&
-		      HDMI_PHY_HPD) ? SND_JACK_LINEOUT : 0;
+	jack_status = plugged ? SND_JACK_LINEOUT : 0;
 
 	if (jack_status != hdmi->jack_status) {
 		snd_soc_jack_report(&hdmi->jack, jack_status,
@@ -63,24 +60,6 @@ int snd_dw_hdmi_jack_detect(struct snd_dw_hdmi *hdmi)
 
 		dev_info(hdmi->dev, "jack report [%d]\n", hdmi->jack_status);
 	}
-
-	return 0;
-}
-
-/* we don't want this irq mark with IRQF_ONESHOT flags,
- * so we build an irq_default_primary_handler here */
-static irqreturn_t snd_dw_hdmi_hardirq(int irq, void *dev_id)
-{
-	return IRQ_WAKE_THREAD;
-}
-
-static irqreturn_t snd_dw_hdmi_irq(int irq, void *dev_id)
-{
-	struct snd_dw_hdmi *hdmi = dev_id;
-
-	snd_dw_hdmi_jack_detect(hdmi);
-
-	return IRQ_HANDLED;
 }
 
 static void dw_hdmi_audio_set_fmt(struct snd_dw_hdmi *hdmi,
@@ -251,13 +230,13 @@ static int snd_dw_hdmi_audio_probe(struct snd_soc_codec *codec)
 			       &hdmi->jack);
 	if (ret) {
 		dev_err(hdmi->dev, "jack new failed (%d)\n", ret);
-		hdmi->is_jack_ready = false;
 		return ret;
 	}
 
-	hdmi->is_jack_ready = true;
+	/* Setup the callback, which will force a call right now to sync up */
+	hdmi->data.set_plugged_callback(hdmi->data.dw, snd_dw_hdmi_plugged);
 
-	return snd_dw_hdmi_jack_detect(hdmi);
+	return 0;
 }
 
 static const struct snd_soc_dapm_widget snd_dw_hdmi_audio_widgets[] = {
@@ -310,16 +289,7 @@ static int dw_hdmi_audio_probe(struct platform_device *pdev)
 
 	hdmi->data = *data;
 	hdmi->dev = &pdev->dev;
-	hdmi->is_jack_ready = false;
 	platform_set_drvdata(pdev, hdmi);
-
-	ret = devm_request_threaded_irq(&pdev->dev, hdmi->data.irq,
-					snd_dw_hdmi_hardirq, snd_dw_hdmi_irq,
-					IRQF_SHARED, "dw-hdmi-audio", hdmi);
-	if (ret) {
-		dev_err(&pdev->dev, "request irq failed (%d)\n", ret);
-		return ret;
-	}
 
 	ret = snd_soc_register_codec(&pdev->dev, &dw_hdmi_audio,
 				     &dw_hdmi_audio_dai, 1);
@@ -344,8 +314,6 @@ static int dw_hdmi_audio_remove(struct platform_device *pdev)
 static int dw_hdmi_audio_resume(struct device *dev)
 {
 	struct snd_dw_hdmi *hdmi = dev_get_drvdata(dev);
-
-	snd_dw_hdmi_jack_detect(hdmi);
 
 	if (hdmi->is_playback_status) {
 		dw_hdmi_audio_set_fmt(hdmi, &hdmi->fmt);

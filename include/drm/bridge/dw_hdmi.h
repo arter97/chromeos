@@ -55,9 +55,14 @@ struct dw_hdmi_phy_config {
 	u16 vlev_ctr;   /* voltage level control */
 };
 
+typedef void (*dw_hdmi_audio_plugged_fn)(struct platform_device *audio_pdev,
+					 bool plugged);
+
 struct dw_hdmi_audio_data {
-	int irq;
 	struct dw_hdmi *dw;
+
+	void (*set_plugged_callback)(struct dw_hdmi *hdmi,
+				     dw_hdmi_audio_plugged_fn fn);
 
 	u8 (*read)(struct dw_hdmi *hdmi, int offset);
 	void (*write)(struct dw_hdmi *hdmi, u8 val, int offset);

@@ -148,6 +148,8 @@ struct dw_hdmi {
 	struct drm_bridge *bridge;
 
 	struct platform_device *audio_pdev;
+	dw_hdmi_audio_plugged_fn audio_plugged_fn;
+
 	enum dw_hdmi_devtype dev_type;
 	struct device *dev;
 	struct clk *isfr_clk;
@@ -1600,6 +1602,18 @@ static void dw_hdmi_phy_disable(struct dw_hdmi *hdmi)
 	hdmi->phy_enabled = false;
 }
 
+static void dw_hdmi_audio_set_plugged_callback(struct dw_hdmi *hdmi,
+					       dw_hdmi_audio_plugged_fn fn)
+{
+	mutex_lock(&hdmi->hpd_mutex);
+
+	/* Set it once and call to sync up state (while holding mutex) */
+	hdmi->audio_plugged_fn = fn;
+	fn(hdmi->audio_pdev, hdmi->plugged);
+
+	mutex_unlock(&hdmi->hpd_mutex);
+}
+
 static void dw_hdmi_audio_clk_enable(struct dw_hdmi *hdmi)
 {
 	hdmi_modb(hdmi, 0, HDMI_MC_CLKDIS_AUDCLK_DISABLE, HDMI_MC_CLKDIS);
@@ -2021,12 +2035,26 @@ dw_hdmi_connector_detect(struct drm_connector *connector, bool force)
 {
 	struct dw_hdmi *hdmi = container_of(connector, struct dw_hdmi,
 					     connector);
+	enum drm_connector_status ret;
 
 	if (hdmi->hpd_ignore)
 		return connector_status_disconnected;
 
-	return hdmi_readb(hdmi, HDMI_PHY_STAT0) & HDMI_PHY_HPD ?
+	/*
+	 * We'll return hdmi->plugged instead of raw HDMI_PHY_STAT0 so that
+	 * everything is consistent with our internal state.  If it's been
+	 * unplugged or plugged in the meantime, we'll get another IRQ.
+	 *
+	 * We want to have the mutex so we know the IRQ isn't currently
+	 * modifying this.  Thus we know that if the IRQ changes it then DRM
+	 * will definitely get told again.
+	 */
+	mutex_lock(&hdmi->hpd_mutex);
+	ret = hdmi->plugged ?
 		connector_status_connected : connector_status_disconnected;
+	mutex_unlock(&hdmi->hpd_mutex);
+
+	return ret;
 }
 
 static int dw_hdmi_connector_get_modes(struct drm_connector *connector)
@@ -2277,6 +2305,9 @@ static irqreturn_t dw_hdmi_irq(int irq, void *dev_id)
 				    HDMI_IH_PHY_STAT0);
 			hdmi->plugged = true;
 
+			if (hdmi->audio_plugged_fn)
+				hdmi->audio_plugged_fn(hdmi->audio_pdev, true);
+
 			mutex_unlock(&hdmi->hpd_mutex);
 
 			dw_hdmi_poweron(hdmi);
@@ -2288,6 +2319,9 @@ static irqreturn_t dw_hdmi_irq(int irq, void *dev_id)
 			hdmi_writeb(hdmi, HDMI_IH_PHY_STAT0_HPD,
 				    HDMI_IH_PHY_STAT0);
 			hdmi->plugged = false;
+
+			if (hdmi->audio_plugged_fn)
+				hdmi->audio_plugged_fn(hdmi->audio_pdev, false);
 
 			mutex_unlock(&hdmi->hpd_mutex);
 
@@ -2477,7 +2511,7 @@ int dw_hdmi_bind(struct device *dev, struct device *master,
 	}
 
 	ret = devm_request_threaded_irq(dev, irq, dw_hdmi_hardirq,
-					dw_hdmi_irq, IRQF_SHARED,
+					dw_hdmi_irq, 0,
 					dev_name(dev), hdmi);
 	if (ret)
 		return ret;
@@ -2577,7 +2611,7 @@ int dw_hdmi_bind(struct device *dev, struct device *master,
 	pdevinfo.parent = dev;
 	pdevinfo.id = PLATFORM_DEVID_NONE;
 
-	audio.irq = irq;
+	audio.set_plugged_callback = dw_hdmi_audio_set_plugged_callback;
 	audio.dw = hdmi;
 	audio.mod = hdmi_modb;
 	audio.read = hdmi_readb;
