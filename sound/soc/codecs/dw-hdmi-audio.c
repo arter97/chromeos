@@ -318,35 +318,24 @@ static int dw_hdmi_audio_probe(struct platform_device *pdev)
 					IRQF_SHARED, "dw-hdmi-audio", hdmi);
 	if (ret) {
 		dev_err(&pdev->dev, "request irq failed (%d)\n", ret);
-		goto free_hdmi_data;
+		return ret;
 	}
 
 	ret = snd_soc_register_codec(&pdev->dev, &dw_hdmi_audio,
 				     &dw_hdmi_audio_dai, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "register codec failed (%d)\n", ret);
-		goto free_irq;
+		return ret;
 	}
 
 	dev_info(&pdev->dev, "hdmi audio init success.\n");
 
 	return 0;
-
-free_irq:
-	devm_free_irq(&pdev->dev, hdmi->data.irq, hdmi);
-free_hdmi_data:
-	devm_kfree(&pdev->dev, hdmi);
-
-	return ret;
 }
 
 static int dw_hdmi_audio_remove(struct platform_device *pdev)
 {
-	struct snd_dw_hdmi *hdmi = platform_get_drvdata(pdev);
-
 	snd_soc_unregister_codec(&pdev->dev);
-	devm_free_irq(&pdev->dev, hdmi->data.irq, hdmi);
-	devm_kfree(&pdev->dev, hdmi);
 
 	return 0;
 }
