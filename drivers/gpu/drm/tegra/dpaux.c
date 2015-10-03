@@ -42,7 +42,8 @@ struct tegra_dpaux {
 	struct regulator *vdd;
 
 	struct completion complete;
-	struct work_struct work;
+	struct workqueue_struct *hotplug_wq;
+	struct delayed_work work;
 	struct list_head list;
 };
 
@@ -53,7 +54,8 @@ static inline struct tegra_dpaux *to_dpaux(struct drm_dp_aux *aux)
 
 static inline struct tegra_dpaux *work_to_dpaux(struct work_struct *work)
 {
-	return container_of(work, struct tegra_dpaux, work);
+	struct delayed_work *dwork = to_delayed_work(work);
+	return container_of(dwork, struct tegra_dpaux, work);
 }
 
 static inline u32 tegra_dpaux_readl(struct tegra_dpaux *dpaux,
@@ -253,8 +255,14 @@ static irqreturn_t tegra_dpaux_irq(int irq, void *data)
 	value = tegra_dpaux_readl(dpaux, DPAUX_INTR_AUX);
 	tegra_dpaux_writel(dpaux, value, DPAUX_INTR_AUX);
 
-	if (value & (DPAUX_INTR_PLUG_EVENT | DPAUX_INTR_UNPLUG_EVENT))
-		schedule_work(&dpaux->work);
+	if (value & DPAUX_INTR_PLUG_EVENT) {
+		if (!cancel_delayed_work(&dpaux->work))
+			queue_delayed_work(dpaux->hotplug_wq, &dpaux->work, 0);
+	}
+
+	if (value & DPAUX_INTR_UNPLUG_EVENT)
+		queue_delayed_work(dpaux->hotplug_wq, &dpaux->work,
+				msecs_to_jiffies(1050));
 
 	if (value & DPAUX_INTR_IRQ_EVENT) {
 		/* TODO: handle this */
@@ -277,7 +285,11 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 	if (!dpaux)
 		return -ENOMEM;
 
-	INIT_WORK(&dpaux->work, tegra_dpaux_hotplug);
+	dpaux->hotplug_wq = alloc_workqueue("hotplug_wq", WQ_UNBOUND, 1);
+	if (!dpaux->hotplug_wq)
+		return -ENOMEM;
+
+	INIT_DELAYED_WORK(&dpaux->work, tegra_dpaux_hotplug);
 	init_completion(&dpaux->complete);
 	INIT_LIST_HEAD(&dpaux->list);
 	dpaux->dev = &pdev->dev;
@@ -410,7 +422,8 @@ static int tegra_dpaux_remove(struct platform_device *pdev)
 	list_del(&dpaux->list);
 	mutex_unlock(&dpaux_lock);
 
-	cancel_work_sync(&dpaux->work);
+	cancel_delayed_work_sync(&dpaux->work);
+	destroy_workqueue(dpaux->hotplug_wq);
 
 	clk_disable_unprepare(dpaux->clk_parent);
 	reset_control_assert(dpaux->rst);
