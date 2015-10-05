@@ -155,6 +155,9 @@ struct wmi_ops {
 	struct sk_buff *(*gen_pdev_sa_disabled_ant_sel)(struct ath10k *ar,
 							u32 mode, u32 tx_ant,
 							u32 rx_ant);
+	struct sk_buff * (*gen_pdev_get_tpc_config)(struct ath10k *ar,
+						   u32 param);
+
 #ifdef CONFIG_ATH10K_SMART_ANTENNA
 	struct sk_buff *(*gen_pdev_enable_smart_ant)(struct ath10k *ar,
 						     u32 mode, u32 tx_ant,
@@ -1128,6 +1131,23 @@ ath10k_wmi_pdev_sa_disabled_ant_sel(struct ath10k *ar, u32 mode,
 
 	return ath10k_wmi_cmd_send(ar, skb,
 				   ar->wmi.cmd->pdev_set_smart_ant_cmdid);
+}
+
+static inline int
+ath10k_wmi_pdev_get_tpc_config(struct ath10k *ar, u32 param)
+{
+	struct sk_buff *skb;
+
+	if (!ar->wmi.ops->gen_pdev_get_tpc_config)
+		return -EOPNOTSUPP;
+
+	skb = ar->wmi.ops->gen_pdev_get_tpc_config(ar, param);
+
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
+
+	return ath10k_wmi_cmd_send(ar, skb,
+				   ar->wmi.cmd->pdev_get_tpc_config_cmdid);
 }
 
 #ifdef CONFIG_ATH10K_SMART_ANTENNA
