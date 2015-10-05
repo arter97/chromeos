@@ -12,11 +12,10 @@
  *
  * Note about the original authors:
  *
- * The driver for AP3223 was originally distributed by dyna image in a
- * different framework (as an input driver). This driver uses code from
- * that driver and converts it to iio framework. The non-iio driver from
- * dyna image is not available online anywhere, so there is no reference
- * for it here. However, that driver is also GPLv2.
+ * This driver is based on the original driver for AP3223 that was distributed
+ * by Dyna Image. That driver was using input framework. The driver from Dyna
+ * image is not available online anywhere, so there is no reference for it here.
+ * However, that driver is also GPLv2.
  * The following is part of the header found in that file
  * (The GPL notice from the original header is removed)
  *
@@ -41,6 +40,9 @@
 #include <linux/i2c.h>
 #include <linux/iio/iio.h>
 #include <linux/iio/sysfs.h>
+#include <linux/iio/events.h>
+#include <linux/interrupt.h>
+#include <linux/of_gpio.h>
 #include <linux/regmap.h>
 #include <linux/device.h>
 
@@ -65,12 +67,16 @@
 #define AP3223_PS_HIGH_THD_H_INIT		0x00
 
 struct ap3223_data {
+	struct mutex ap3223_mutex;
 	struct i2c_client *client;
 	struct regmap *regmap;
+	bool event_enabled;
 };
 
 static const u8 ap3223_initial_reg_conf[] = {
 	AP3223_REG_SYS_CTRL, AP3223_SYS_ALS_PS_ENABLE,
+	AP3223_REG_SYS_INTCTRL, (AP3223_SYS_INT_PINT_EN |
+				 AP3223_SYS_INT_CLEAR_AUTO),
 	AP3223_REG_SYS_WAITTIME, AP3223_WAITTIME_SLOT(0),
 	AP3223_REG_ALS_GAIN, (AP3223_ALS_RANGE_2 << AP3223_ALS_RANGE_SHIFT),
 	AP3223_REG_ALS_THDL_L, AP3223_ALS_LOW_THD_L_INIT,
@@ -85,6 +91,7 @@ static const u8 ap3223_initial_reg_conf[] = {
 	AP3223_REG_PS_INTEGR_TIME, AP3223_PS_INTEGR_TIME_SEL(0x1F),
 	AP3223_REG_PS_PERSIST, AP3223_PS_PERSIST_CONV_TIME(0x01),
 	AP3223_REG_PS_THDL_L, AP3223_PS_LOW_THD_L_INIT,
+	AP3223_REG_PS_THDL_H, AP3223_PS_LOW_THD_H_INIT,
 	AP3223_REG_PS_THDH_L, AP3223_PS_HIGH_THD_L_INIT,
 	AP3223_REG_PS_THDH_H, AP3223_PS_HIGH_THD_H_INIT
 };
@@ -198,6 +205,15 @@ static const struct regmap_config ap3223_regmap_config = {
 	.volatile_reg = ap3223_is_volatile_reg,
 };
 
+static const struct iio_event_spec ap3223_prox_event_spec[] = {
+	{
+		.type = IIO_EV_TYPE_THRESH,
+		.dir = IIO_EV_DIR_EITHER,
+		.mask_separate = BIT(IIO_EV_INFO_VALUE) |
+				BIT(IIO_EV_INFO_ENABLE),
+	}
+};
+
 #define AP3223_LIGHT_CHANNEL {				\
 	.type = IIO_LIGHT,				\
 	.info_mask_separate = BIT(IIO_CHAN_INFO_RAW),	\
@@ -206,6 +222,8 @@ static const struct regmap_config ap3223_regmap_config = {
 #define AP3223_PROXIMITY_CHANNEL {			\
 	.type = IIO_PROXIMITY,				\
 	.info_mask_separate = BIT(IIO_CHAN_INFO_RAW),	\
+	.event_spec = ap3223_prox_event_spec,           \
+	.num_event_specs = ARRAY_SIZE(ap3223_prox_event_spec),\
 }
 
 static const struct iio_chan_spec ap3223_channels[] = {
@@ -318,6 +336,40 @@ static int ap3223_get_object(struct i2c_client *client)
 			      AP3223_REG_SYS_INT_OBJ_SHIFT);
 }
 
+static int ap3223_clear_irq_flag(struct i2c_client *client)
+{
+	/*
+	 * If AP3223_REG_SYS_INTCTRL:CLR_MNR is set to
+	 * AP3223_SYS_INT_CLEAR_AUTO(0), the interrupt flag is automatically
+	 * cleared by reading the following data
+	 * registers;
+	 *
+	 * AP3223_REG_ALS_DATA_LOW & AP3223_REG_ALS_DATA_HIGH - for ALS
+	 * AP3223_REG_PS_DATA_LOW & AP3223_REG_PS_DATA_HIGH - for PS
+	 *
+	 * If AP3223_REG_SYS_INTCTRL:CLR_MNR is set to
+	 * AP3223_SYS_INT_CLEAR_MANUAL(1), the interrupt flag is cleared
+	 * manually. i.e,
+	 *
+	 * If PS_INT is asserted, it can be cleared after I2C writes to
+	 * AP3223_REG_SYS_INTSTATUS with AP3223_REG_SYS_INT_PMASK
+	 *
+	 * If ALS_INT is asserted, it can be cleared after I2C writes to
+	 * AP3223_REG_SYS_INTSTATUS with AP3223_REG_SYS_INT_AMASK
+	 */
+
+	struct ap3223_data *data = iio_priv(i2c_get_clientdata(client));
+	unsigned int lsb, msb;
+
+	if (regmap_read(data->regmap, AP3223_REG_PS_DATA_LOW, &lsb) < 0)
+		return -EINVAL;
+
+	if (regmap_read(data->regmap, AP3223_REG_PS_DATA_HIGH, &msb) < 0)
+		return -EINVAL;
+
+	return 0;
+}
+
 static int ap3223_sw_reset(struct i2c_client *client)
 {
 	struct ap3223_data *data = iio_priv(i2c_get_clientdata(client));
@@ -351,6 +403,8 @@ static int ap3223_read_raw(struct iio_dev *indio_dev,
 	struct ap3223_data *data = iio_priv(indio_dev);
 	int ret = -EINVAL;
 
+	mutex_lock(&data->ap3223_mutex);
+
 	switch (mask) {
 	case IIO_CHAN_INFO_RAW:
 		switch (chan->type) {
@@ -359,10 +413,11 @@ static int ap3223_read_raw(struct iio_dev *indio_dev,
 			if (ret < 0)
 				break;
 
-			*val = ap3223_get_adc_value(data->client);
-			if (*val < 0)
+			ret = ap3223_get_adc_value(data->client);
+			if (ret < 0)
 				break;
 
+			*val = ret;
 			ret = IIO_VAL_INT;
 			break;
 
@@ -377,18 +432,114 @@ static int ap3223_read_raw(struct iio_dev *indio_dev,
 		default:
 			break;
 		}
+		break;
 
 	default:
-	       break;
+		break;
 	}
+
+	mutex_unlock(&data->ap3223_mutex);
+
+	return ret;
+}
+
+static int ap3223_read_event_value(struct iio_dev *indio_dev,
+				   const struct iio_chan_spec *chan,
+				   enum iio_event_type type,
+				   enum iio_event_direction dir,
+				   enum iio_event_info info, int *val,
+				   int *val2)
+{
+	struct ap3223_data *data = iio_priv(indio_dev);
+	int ret = IIO_VAL_INT;
+
+	mutex_lock(&data->ap3223_mutex);
+
+	*val = ap3223_get_object(data->client);
+	if (*val < 0)
+		ret = -EINVAL;
+
+	mutex_unlock(&data->ap3223_mutex);
+
+	return ret;
+}
+
+static int ap3223_read_event_config(struct iio_dev *indio_dev,
+				    const struct iio_chan_spec *chan,
+				    enum iio_event_type type,
+				    enum iio_event_direction dir)
+{
+	struct ap3223_data *data = iio_priv(indio_dev);
+	return data->event_enabled;
+}
+
+static int ap3223_write_event_config(struct iio_dev *indio_dev,
+				     const struct iio_chan_spec *chan,
+				     enum iio_event_type type,
+				     enum iio_event_direction dir, int state)
+{
+	struct ap3223_data *data = iio_priv(indio_dev);
+	int ret = 0;
+
+	mutex_lock(&data->ap3223_mutex);
+
+	if (data->client->irq <= 0) {
+		ret = -EINVAL;
+		goto ap3223_write_event_exit;
+	}
+
+	if (state && data->event_enabled == false) {
+		enable_irq(data->client->irq);
+		data->event_enabled = true;
+	} else if (!state && data->event_enabled == true) {
+		disable_irq_nosync(data->client->irq);
+		data->event_enabled = false;
+	}
+
+ap3223_write_event_exit:
+	mutex_unlock(&data->ap3223_mutex);
 
 	return ret;
 }
 
 static const struct iio_info ap3223_info = {
-	.driver_module  = THIS_MODULE,
-	.read_raw       = ap3223_read_raw,
+	.read_raw		= ap3223_read_raw,
+	.read_event_value	= &ap3223_read_event_value,
+	.read_event_config	= &ap3223_read_event_config,
+	.write_event_config	= &ap3223_write_event_config,
+	.driver_module		= THIS_MODULE,
 };
+
+static irqreturn_t ap3223_irq_threaded_fn(int irq, void *ptr)
+{
+	struct ap3223_data *data = ptr;
+	unsigned int int_stat;
+	int ev_dir;
+	u64 ev_code;
+	int ret = -EIO;
+	struct iio_dev *indio_dev = i2c_get_clientdata(data->client);
+
+	mutex_lock(&data->ap3223_mutex);
+
+	if (regmap_read(data->regmap, AP3223_REG_SYS_INTSTATUS, &int_stat) >= 0)
+		if (ap3223_clear_irq_flag(data->client) >= 0)
+			ret = 0;
+
+	mutex_unlock(&data->ap3223_mutex);
+
+	if (ret >= 0 && int_stat & AP3223_REG_SYS_INT_PMASK) {
+		if (int_stat & AP3223_REG_SYS_INT_OBJ_MASK)
+			ev_dir = IIO_EV_DIR_FALLING;
+		else
+			ev_dir = IIO_EV_DIR_RISING;
+
+		ev_code = IIO_UNMOD_EVENT_CODE(IIO_PROXIMITY, 0,
+					       IIO_EV_TYPE_THRESH, ev_dir);
+		iio_push_event(indio_dev, ev_code, iio_get_time_ns());
+	}
+
+	return IRQ_HANDLED;
+}
 
 static int ap3223_init_reg_config(struct i2c_client *client)
 {
@@ -404,6 +555,22 @@ static int ap3223_init_reg_config(struct i2c_client *client)
 	return 0;
 }
 
+#ifdef CONFIG_OF
+static inline void ap3223_init_of(struct i2c_client *client)
+{
+	struct device_node *np = client->dev.of_node;
+	u16 int_gpio = 0;
+
+	if (np) {
+		int_gpio = of_get_named_gpio(np, "int-gpio", 0);
+		if (gpio_is_valid(int_gpio))
+			client->irq = gpio_to_irq(int_gpio);
+	}
+}
+#else
+static inline void ap3223_init_of(struct i2c_client *client) {}
+#endif /* CONFIG_OF */
+
 static int ap3223_init(struct ap3223_data *data)
 {
 	struct i2c_client *client = data->client;
@@ -412,26 +579,49 @@ static int ap3223_init(struct ap3223_data *data)
 
 	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_BYTE)) {
 		err = -EIO;
-		goto exit_ap3223_init;
+		goto ap3223_init_exit;
 	}
+
+	ap3223_init_of(client);
 
 	err = ap3223_sw_reset(client);
 	if (err < 0)
-		goto exit_ap3223_init;
+		goto ap3223_init_exit;
 
 	err = ap3223_init_client(client);
 	if (err < 0)
-		goto exit_ap3223_init;
+		goto ap3223_init_exit;
 
 	err = ap3223_init_reg_config(client);
 	if (err < 0) {
 		dev_err(&client->dev, "Failed to write initial reg config\n");
-		goto exit_ap3223_init;
+		goto ap3223_init_exit;
+	}
+
+	if (client->irq > 0) {
+		err = request_threaded_irq(client->irq, NULL,
+					   ap3223_irq_threaded_fn,
+					   IRQF_TRIGGER_FALLING |
+					   IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+					   "ap3223", data);
+		if (err < 0) {
+			dev_err(&client->dev, "Err: %d, could not get IRQ %d\n",
+				err, client->irq);
+			goto ap3223_init_exit;
+		}
+
+		data->event_enabled = true;
 	}
 
 	err = regcache_sync(data->regmap);
+	if (err < 0) {
+		dev_err(&client->dev, "regcache_sync failure");
+		goto ap3223_init_exit;
+	}
 
-exit_ap3223_init:
+	return 0;
+
+ap3223_init_exit:
 	return err;
 }
 
@@ -460,6 +650,9 @@ static int ap3223_probe(struct i2c_client *client,
 
 	data->regmap = regmap;
 	data->client = client;
+	data->event_enabled = false;
+
+	mutex_init(&data->ap3223_mutex);
 	indio_dev->dev.parent = &client->dev;
 	indio_dev->info = &ap3223_info;
 	indio_dev->name = AP3223_DRV_NAME;
@@ -479,6 +672,9 @@ static int ap3223_probe(struct i2c_client *client,
 static int ap3223_remove(struct i2c_client *client)
 {
 	struct ap3223_data *data = iio_priv(i2c_get_clientdata(client));
+
+	if (client->irq > 0)
+		free_irq(client->irq, data);
 
 	ap3223_sw_reset(data->client);
 	ap3223_set_mode(data->client, 0);
