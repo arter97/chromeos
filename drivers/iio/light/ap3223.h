@@ -12,11 +12,11 @@
  *
  * Note about the original authors:
  *
- * The driver for AP3223 was originally distributed by dyna image in a
- * different framework. This driver uses code from that driver and converts
- * it to iio framework. The non-iio driver from dyna image is not available
- * online anywhere, so there is no reference for it here. However, that driver
- * is also GPLv2. The following is part of the header found in that file
+ * This driver is based on the original driver for AP3223 that was distributed
+ * by Dyna Image. That driver was using input framework. The driver from Dyna
+ * image is not available online anywhere, so there is no reference for it here.
+ * However, that driver is also GPLv2.
+ * The following is part of the header found in that file
  * (The GPL notice from the original header is removed)
  *
  * >> This file is part of the AP3223, AP3212C and AP3216C sensor driver.
@@ -30,6 +30,9 @@
  *
  * Not sure for what kernel version the driver from dyna image was written for.
  * Vic Lee <Vic_Lee@asus.com> made modifications to it to run on 3.14.
+ *
+ * Datasheet:
+ * http://www.dyna-image.com/english/product/optical-sensor-detail.php?cpid=2&dpid=8#doc
  */
 
 #ifndef __AP3223_H__
@@ -65,6 +68,20 @@
 #define AP3223_REG_SYS_INT_IR_OV_MASK	0x20
 
 #define AP3223_REG_SYS_INTCTRL		0x02
+#define AP3223_SYS_INT_AIEN_MASK	0x08
+#define AP3223_SYS_INT_PIEN_MASK	0x80
+#define AP3223_SYS_INT_CLR_MNR_MASK	0x01
+
+#define AP3223_SYS_INT_AIEN_SHIFT	(3)
+#define AP3223_SYS_INT_PIEN_SHIFT	(7)
+
+/* ALS Interrupt */
+
+#define AP3223_SYS_INT_AINT_EN		(1 << AP3223_SYS_INT_AIEN_SHIFT)
+
+/* PS Interrupt */
+
+#define AP3223_SYS_INT_PINT_EN		(1 << AP3223_SYS_INT_PIEN_SHIFT)
 
 /* INT Clear Manner */
 
