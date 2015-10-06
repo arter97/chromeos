@@ -666,6 +666,11 @@ static void vop_enable(struct drm_crtc *crtc)
 
 	drm_vblank_on(vop->drm_dev, vop->pipe);
 
+	if (!vop->dmc_disabled && vop->vblank_time <= DMC_SET_RATE_TIME_NS +
+	    DMC_PAUSE_CPU_TIME_NS) {
+		rockchip_dmc_disable();
+		vop->dmc_disabled = true;
+	}
 	rockchip_dmc_get(&vop->dmc_nb);
 
 	return;
@@ -698,6 +703,10 @@ static void vop_disable(struct drm_crtc *crtc)
 	cancel_work_sync(&vop->load_lut_work);
 
 	rockchip_dmc_put(&vop->dmc_nb);
+	if (vop->dmc_disabled) {
+		rockchip_dmc_enable();
+		vop->dmc_disabled = false;
+	}
 	drm_vblank_off(crtc->dev, vop->pipe);
 
 	/*
@@ -1686,6 +1695,7 @@ static int vop_create_crtc(struct vop *vop)
 		goto err_cleanup_crtc;
 	}
 
+	vop->vblank_time = DMC_DEFAULT_TIMEOUT_NS;
 	vop->dmc_nb.notifier_call = dmc_notify;
 	init_completion(&vop->dmc_completion);
 	init_completion(&vop->dsp_hold_completion);
