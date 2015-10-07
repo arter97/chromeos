@@ -10,3 +10,4 @@ obj-$(CONFIG_ALX) += alx/
 obj-$(CONFIG_QCA_NSS_DRV) += nss-drv/
 obj-$(CONFIG_QCA_NSS_GMAC) += nss-gmac/
 obj-$(CONFIG_QCA_NSS_ECM) += nss-ecm/
+obj-$(CONFIG_QCA_NSS_QDISC) += nss-qdisc/

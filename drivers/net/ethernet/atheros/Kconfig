@@ -116,4 +116,14 @@ config QCA_NSS_ECM
 
 	  The module will be called ecm.
 
+config QCA_NSS_QDISC
+	tristate "Qualcomm/Atheros NSS qdisc implememtation"
+	depends on ARCH_QCOM && QCA_NSS_DRV
+	---help---
+	  This driver supports the Qualcomm/Atheros IPQ806x implememtation of linux
+	  qdiscs. User can use iproute2/tc command to configure nss_qdisc to offload
+	  queueing work into NSS core.
+
+	  The module will be called qca-nss-qdisc.
+
 endif # NET_VENDOR_ATHEROS
