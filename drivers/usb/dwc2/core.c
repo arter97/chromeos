@@ -3095,18 +3095,19 @@ int dwc2_get_hwparams(struct dwc2_hsotg *hsotg)
 
 	/* Force host mode to get HPTXFSIZ / GNPTXFSIZ exact power on value */
 	gusbcfg = readl(hsotg->regs + GUSBCFG);
-	gusbcfg |= GUSBCFG_FORCEHOSTMODE;
-	writel(gusbcfg, hsotg->regs + GUSBCFG);
-	usleep_range(25000, 50000);
+	if (!(gusbcfg & GUSBCFG_FORCEHOSTMODE)) {
+		writel(gusbcfg | GUSBCFG_FORCEHOSTMODE, hsotg->regs + GUSBCFG);
+		usleep_range(25000, 50000);
+	}
 
 	gnptxfsiz = readl(hsotg->regs + GNPTXFSIZ);
 	hptxfsiz = readl(hsotg->regs + HPTXFSIZ);
 	dev_dbg(hsotg->dev, "gnptxfsiz=%08x\n", gnptxfsiz);
 	dev_dbg(hsotg->dev, "hptxfsiz=%08x\n", hptxfsiz);
-	gusbcfg = readl(hsotg->regs + GUSBCFG);
-	gusbcfg &= ~GUSBCFG_FORCEHOSTMODE;
-	writel(gusbcfg, hsotg->regs + GUSBCFG);
-	usleep_range(25000, 50000);
+	if (!(gusbcfg & GUSBCFG_FORCEHOSTMODE)) {
+		writel(gusbcfg, hsotg->regs + GUSBCFG);
+		usleep_range(25000, 50000);
+	}
 
 	/* hwcfg2 */
 	hw->op_mode = (hwcfg2 & GHWCFG2_OP_MODE_MASK) >>
