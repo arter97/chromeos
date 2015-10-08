@@ -759,7 +759,7 @@ static void tegra_plane_atomic_disable(struct drm_plane *plane,
 	u32 value;
 
 	/* rien ne va plus */
-	if (!old_state || !old_state->crtc)
+	if (!old_state || !old_state->crtc || !old_state->crtc->state->active)
 		return;
 
 	dc = to_tegra_dc(old_state->crtc);
@@ -959,7 +959,7 @@ static void tegra_cursor_atomic_disable(struct drm_plane *plane,
 	u32 value;
 
 	/* rien ne va plus */
-	if (!old_state || !old_state->crtc)
+	if (!old_state || !old_state->crtc || !old_state->crtc->state->active)
 		return;
 
 	dc = to_tegra_dc(old_state->crtc);
