@@ -732,6 +732,8 @@ void assert_pipe(struct drm_i915_private *dev_priv, enum pipe pipe, bool state);
 #define assert_pipe_disabled(d, p) assert_pipe(d, p, false)
 void intel_write_eld(struct drm_encoder *encoder,
 		     struct drm_display_mode *mode);
+int i915_audio_component_sync_audio_rate(struct drm_i915_private *dev_priv,
+					 int port, int rate);
 unsigned long intel_gen4_compute_page_offset(int *x, int *y,
 					     unsigned int tiling_mode,
 					     unsigned int bpp,

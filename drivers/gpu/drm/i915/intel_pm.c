@@ -32,6 +32,7 @@
 #include <linux/module.h>
 #include <linux/vgaarb.h>
 #include <drm/i915_powerwell.h>
+#include <drm/i915_sync_audio.h>
 #include <linux/pm_runtime.h>
 
 /**
@@ -5546,6 +5547,30 @@ int i915_get_cdclk_freq(void)
 }
 EXPORT_SYMBOL_GPL(i915_get_cdclk_freq);
 
+/*
+ * Private interface for the audio driver to set n/cts based on the sample rate.
+ *
+ * Called from audio driver. After audio driver sets the
+ * sample rate, it will call this function to set n/cts
+ */
+int i915_sync_audio_rate(int port, int rate)
+{
+	struct drm_i915_private *dev_priv;
+	int ret;
+
+	if (!hsw_pwr)
+		return -ENODEV;
+
+	dev_priv = container_of(hsw_pwr, struct drm_i915_private,
+				power_domains);
+
+	intel_display_power_get(dev_priv->dev, POWER_DOMAIN_AUDIO);
+	ret = i915_audio_component_sync_audio_rate(dev_priv, port, rate);
+	intel_display_power_put(dev_priv->dev, POWER_DOMAIN_AUDIO);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(i915_sync_audio_rate);
 
 static struct i915_power_well i9xx_always_on_power_well[] = {
 	{
