@@ -1,0 +1,40 @@
+/*
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the License, or (at your option)
+ *  any later version.
+ *
+ *  This program is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ *  more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with
+ *  this program; if not, write to the Free Software Foundation, Inc., 59
+ *  Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ */
+#ifndef __SOUND_PATCH_HDMI_I915_H
+#define __SOUND_PATCH_HDMI_I915_H
+
+#include "hda_codec.h"
+
+#ifdef CONFIG_SND_HDA_I915
+int patch_hdmi_i915_sync_audio_rate(hda_nid_t pin_nid, int rate);
+int patch_hdmi_i915_init(void);
+int patch_hdmi_i915_exit(void);
+#else
+static inline int patch_hdmi_i915_sync_audio_rate(hda_nid_t pin_nid, int rate)
+{
+	return -ENODEV;
+}
+static inline int patch_hdmi_i915_init(void)
+{
+	return -ENODEV;
+}
+static inline int patch_hdmi_i915_exit(void)
+{
+	return 0;
+}
+#endif
+
+#endif

@@ -45,6 +45,7 @@
 #include "hda_codec.h"
 #include "hda_local.h"
 #include "hda_jack.h"
+#include "patch_hdmi_i915.h"
 
 static bool static_hdmi_pcm;
 module_param(static_hdmi_pcm, bool, 0644);
@@ -1799,6 +1800,8 @@ static int generic_hdmi_playback_pcm_prepare(struct hda_pcm_stream *hinfo,
 		intel_not_share_assigned_cvt(codec, pin_nid, per_pin->mux_idx);
 	}
 
+	patch_hdmi_i915_sync_audio_rate(pin_nid, substream->runtime->rate);
+
 	non_pcm = check_non_pcm_per_cvt(codec, cvt_nid);
 	mutex_lock(&per_pin->lock);
 	per_pin->channels = substream->runtime->channels;
@@ -3448,11 +3451,15 @@ static struct hda_codec_preset_list intel_list = {
 
 static int __init patch_hdmi_init(void)
 {
+	patch_hdmi_i915_init();
+
 	return snd_hda_add_codec_preset(&intel_list);
 }
 
 static void __exit patch_hdmi_exit(void)
 {
+	patch_hdmi_i915_exit();
+
 	snd_hda_delete_codec_preset(&intel_list);
 }
 

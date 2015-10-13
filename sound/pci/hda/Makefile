@@ -25,6 +25,7 @@ snd-hda-codec-ca0132-objs :=	patch_ca0132.o
 snd-hda-codec-conexant-objs :=	patch_conexant.o
 snd-hda-codec-via-objs :=	patch_via.o
 snd-hda-codec-hdmi-objs :=	patch_hdmi.o hda_eld.o
+snd-hda-codec-hdmi-$(CONFIG_SND_HDA_I915) += patch_hdmi_i915.o
 
 # common driver
 obj-$(CONFIG_SND_HDA) := snd-hda-codec.o
