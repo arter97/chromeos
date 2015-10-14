@@ -1826,7 +1826,6 @@ static struct drm_display_mode *drm_mode_detailed(struct drm_device *dev,
 	unsigned hsync_pulse_width = (pt->hsync_vsync_offset_pulse_width_hi & 0x30) << 4 | pt->hsync_pulse_width_lo;
 	unsigned vsync_offset = (pt->hsync_vsync_offset_pulse_width_hi & 0xc) << 2 | pt->vsync_offset_pulse_width_lo >> 4;
 	unsigned vsync_pulse_width = (pt->hsync_vsync_offset_pulse_width_hi & 0x3) << 4 | (pt->vsync_offset_pulse_width_lo & 0xf);
-	int computed_pclk;
 
 	/* ignore tiny modes */
 	if (hactive < 64 || vactive < 64)
@@ -1907,11 +1906,6 @@ set_size:
 
 	mode->type = DRM_MODE_TYPE_DRIVER;
 	mode->vrefresh = drm_mode_vrefresh(mode);
-	if (!(quirks & EDID_QUIRK_135_CLOCK_TOO_HIGH)) {
-		computed_pclk = ((u64)mode->htotal * mode->vtotal * mode->vrefresh) / 1000;
-		if (computed_pclk > mode->clock)
-			mode->clock = computed_pclk;
-	}
 	drm_mode_set_name(mode);
 
 	return mode;
