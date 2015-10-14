@@ -35,6 +35,7 @@
  * http://www.dyna-image.com/english/product/optical-sensor-detail.php?cpid=2&dpid=8#doc
  */
 
+#include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/i2c.h>
@@ -547,8 +548,25 @@ static int ap3223_init_reg_config(struct i2c_client *client)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(ap3223_initial_reg_conf); i += 2) {
-		if (regmap_write(data->regmap, ap3223_initial_reg_conf[i],
-			     ap3223_initial_reg_conf[i + 1]) < 0)
+		/*
+		 * Taking care of transient i2c failures during init.
+		 * Usually succeedes at first retry.
+		 */
+		int retry = 15;
+
+		for (; retry; retry--) {
+			if (regmap_write(data->regmap,
+					 ap3223_initial_reg_conf[i],
+					 ap3223_initial_reg_conf[i + 1]) >= 0)
+				break;
+			/*
+			 * Testing shows 1000us delay is sufficient for AP3223
+			 * to recover from failed write in one retry.
+			 */
+			usleep_range(1000, 2000);
+		}
+
+		if (!retry)
 			return -EINVAL;
 	}
 
