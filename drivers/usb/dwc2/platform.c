@@ -277,7 +277,6 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	}
 
 	spin_lock_init(&hsotg->lock);
-	mutex_init(&hsotg->init_mutex);
 
 	/*
 	 * Reset before dwc2_get_hwparams() then it could get power-on real
