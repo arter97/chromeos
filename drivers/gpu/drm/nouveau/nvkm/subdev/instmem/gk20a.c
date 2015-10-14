@@ -237,6 +237,8 @@ gk20a_instobj_wr32(struct nvkm_object *object, u64 offset, u32 data)
 		priv->addr = base;
 	}
 	nv_wr32(priv, 0x700000 + addr, data);
+	/* Synchronize write posting by MMIO read from the same domain. */
+	nv_rd32(priv, 0x700000 + addr);
 	spin_unlock_irqrestore(&priv->lock, flags);
 }
 
