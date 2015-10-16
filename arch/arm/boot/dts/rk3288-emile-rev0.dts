@@ -1,0 +1,209 @@
+/*
+ * Google Veyron Emile Rev 0 board device tree source
+ *
+ * Copyright 2015 Google, Inc
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
+/dts-v1/;
+#include "rk3288-veyron.dtsi"
+#include "rk3288-veyron-analog-audio.dtsi"
+#include "rk3288-veyron-ddr3.dtsi"
+#include "rk3288-veyron-ethernet.dtsi"
+#include "rk3288-veyron-sdmmc.dtsi"
+
+/ {
+	model = "Google Emile";
+	compatible = "google,veyron-emile-rev8", "google,veyron-emile-rev7",
+		     "google,veyron-emile-rev6", "google,veyron-emile-rev5",
+		     "google,veyron-emile-rev4", "google,veyron-emile-rev3",
+		     "google,veyron-emile-rev2", "google,veyron-emile-rev1",
+		     "google,veyron-emile-rev0", "google,veyron-emile",
+		     "google,veyron", "rockchip,rk3288";
+
+	vcc33_io: vcc33-io {
+		compatible = "regulator-fixed";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-name = "vcc33_io";
+		vin-supply = <&vcc33_sys>;
+	};
+
+	vcc5_host1: vcc5-host1 {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio2 10 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&usb3_pwr_en>;
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-name = "vcc5_host1";
+		vin-supply = <&vcc_5v>;
+	};
+
+	vcc5_host2: vcc5-host2 {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio2 11 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&usb2_pwr_en>;
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-name = "vcc5_host2";
+		vin-supply = <&vcc_5v>;
+	};
+};
+
+&vcc_5v {
+	enable-active-high;
+	gpio = <&gpio7 3 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&drv_5v>;
+};
+
+&vcc50_hdmi {
+	enable-active-high;
+	gpio = <&gpio7 2 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&power_hdmi_on>;
+};
+
+&rk808 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pmic_int_l &dvs_1 &dvs_2>;
+	dvs-gpios = <&gpio7 12 GPIO_ACTIVE_HIGH>,
+		    <&gpio7 15 GPIO_ACTIVE_HIGH>;
+
+	/delete-property/ vcc6-supply;
+
+	vcc9-supply = <&vcc33_sys>;
+	vcc11-supply = <&vcc33_sys>;
+	vcc12-supply = <&vcc33_sys>;
+
+	regulators {
+		/* vcc33_io is sourced directly from vcc33_sys */
+		/delete-node/ LDO_REG1;
+
+		/* This is not a pwren anymore, but the real power supply */
+		vdd10_lcd: LDO_REG7 {
+			regulator-always-on;
+			regulator-boot-on;
+			regulator-min-microvolt = <1000000>;
+			regulator-max-microvolt = <1000000>;
+			regulator-name = "vdd10_lcd";
+			regulator-suspend-mem-disabled;
+		};
+
+		vcc18_lcd: LDO_REG8 {
+			regulator-always-on;
+			regulator-boot-on;
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			regulator-name = "vcc18_lcd";
+			regulator-suspend-mem-disabled;
+		};
+
+		vcc33_lan: SWITCH_REG2 {
+			regulator-always-on;
+			regulator-boot-on;
+			regulator-name = "vcc33_lan";
+			regulator-suspend-mem-disabled;
+		};
+	};
+};
+
+&gmac {
+	phy-supply = <&vcc33_lan>;
+};
+
+&sdmmc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdmmc_clk &sdmmc_cmd &sdmmc_cd_disabled &sdmmc_cd_gpio
+		     &sdmmc_wp_gpio &sdmmc_bus4>;
+	wp-gpios = <&gpio7 10 GPIO_ACTIVE_HIGH>;
+};
+
+&pinctrl {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <
+		/* Common for sleep and wake, but no owners */
+		&ddr0_retention
+		&ddrio_pwroff
+		&global_pwroff
+
+		/* Wake only */
+		&bt_dev_wake_awake
+		&power_led_on
+		&sleep_led_off
+	>;
+	pinctrl-1 = <
+		/* Common for sleep and wake, but no owners */
+		&ddr0_retention
+		&ddrio_pwroff
+		&global_pwroff
+
+		/* Sleep only */
+		&bt_dev_wake_sleep
+		&power_led_off
+		&sleep_led_on
+	>;
+
+	buck-5v {
+		drv_5v: drv-5v {
+			rockchip,pins = <7 3 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	hdmi {
+		power_hdmi_on: power-hdmi-on {
+			rockchip,pins = <7 2 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	leds {
+		power_led_on: power-led-on {
+			rockchip,pins = <0 11 RK_FUNC_GPIO &pcfg_output_high>;
+		};
+
+		power_led_off: power-led-off {
+			rockchip,pins = <0 11 RK_FUNC_GPIO &pcfg_output_low>;
+		};
+
+		sleep_led_on: sleep-led-on {
+			rockchip,pins = <7 0 RK_FUNC_GPIO &pcfg_output_high>;
+		};
+
+		sleep_led_off: sleep-led-off {
+			rockchip,pins = <7 0 RK_FUNC_GPIO &pcfg_output_low>;
+		};
+	};
+
+	pmic {
+		dvs_1: dvs-1 {
+			rockchip,pins = <7 12 RK_FUNC_GPIO &pcfg_pull_down>;
+		};
+
+		dvs_2: dvs-2 {
+			rockchip,pins = <7 15 RK_FUNC_GPIO &pcfg_pull_down>;
+		};
+	};
+
+	sdmmc {
+		sdmmc_wp_gpio: sdmmc-wp-gpio {
+			rockchip,pins = <7 10 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	usb-pwr-en {
+		usb2_pwr_en: usb2-pwr-en {
+			rockchip,pins = <2 11 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		usb3_pwr_en: usb3-pwr-en {
+			rockchip,pins = <2 10 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+};
