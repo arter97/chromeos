@@ -71,6 +71,7 @@ struct ap3223_data {
 	struct mutex ap3223_mutex;
 	struct i2c_client *client;
 	struct regmap *regmap;
+	int ps_calib;
 	bool event_enabled;
 };
 
@@ -209,7 +210,12 @@ static const struct regmap_config ap3223_regmap_config = {
 static const struct iio_event_spec ap3223_prox_event_spec[] = {
 	{
 		.type = IIO_EV_TYPE_THRESH,
-		.dir = IIO_EV_DIR_EITHER,
+		.dir = IIO_EV_DIR_RISING,
+		.mask_separate = BIT(IIO_EV_INFO_VALUE) |
+				BIT(IIO_EV_INFO_ENABLE),
+	}, {
+		.type = IIO_EV_TYPE_THRESH,
+		.dir = IIO_EV_DIR_FALLING,
 		.mask_separate = BIT(IIO_EV_INFO_VALUE) |
 				BIT(IIO_EV_INFO_ENABLE),
 	}
@@ -222,7 +228,8 @@ static const struct iio_event_spec ap3223_prox_event_spec[] = {
 
 #define AP3223_PROXIMITY_CHANNEL {			\
 	.type = IIO_PROXIMITY,				\
-	.info_mask_separate = BIT(IIO_CHAN_INFO_RAW),	\
+	.info_mask_separate = BIT(IIO_CHAN_INFO_RAW) |	\
+			BIT(IIO_CHAN_INFO_CALIBBIAS),	\
 	.event_spec = ap3223_prox_event_spec,           \
 	.num_event_specs = ARRAY_SIZE(ap3223_prox_event_spec),\
 }
@@ -397,6 +404,58 @@ static int ap3223_init_client(struct i2c_client *client)
 	return 0;
 }
 
+static int ap3223_set_ps_calib(struct i2c_client *client, int val)
+{
+	int err;
+
+	err = ap3223_write_reg(client, AP3223_REG_PS_CAL_L,
+			       AP3223_REG_PS_CAL_L_MASK,
+			       AP3223_REG_PS_CAL_L_SHIFT, val);
+	if (err < 0) {
+		dev_err(&client->dev, "Failed to set PS Calibration(L)\n");
+		return err;
+	}
+
+	err = ap3223_write_reg(client, AP3223_REG_PS_CAL_H,
+			       AP3223_REG_PS_CAL_H_MASK,
+			       AP3223_REG_PS_CAL_H_SHIFT, val >> 8);
+	if (err < 0)
+		dev_err(&client->dev, "Failed to set PS Calibration(H)\n");
+
+	return err;
+}
+
+static int ap3223_set_ps_thres(struct i2c_client *client,
+			       u8 address,
+			       int val)
+{
+	int err = -EINVAL;
+	/* Shitfs of all the threshold registers are same */
+	u8 shift = AP3223_REG_PS_THDH_L_SHIFT;
+
+	/*
+	 * AP3223_REG_PS_THDL_L_MASK = AP3223_REG_PS_THDH_L_MASK and
+	 * AP3223_REG_PS_THDL_H_MASK = AP3223_REG_PS_THDH_H_MASK
+	 */
+
+	err = ap3223_write_reg(client, address, AP3223_REG_PS_THDH_L_MASK,
+			       shift, val);
+	if (err < 0) {
+		dev_err(&client->dev, "Failed to set PS Threshold (L)\n");
+		goto out;
+	}
+
+	address++;
+
+	err = ap3223_write_reg(client, address, AP3223_REG_PS_THDH_H_MASK,
+			       shift, val >> 8);
+	if (err < 0)
+		dev_err(&client->dev, "Failed to set PS Threshold (H)\n");
+
+out:
+	return err;
+}
+
 static int ap3223_read_raw(struct iio_dev *indio_dev,
 			   struct iio_chan_spec const *chan, int *val,
 			   int *val2, long mask)
@@ -435,6 +494,51 @@ static int ap3223_read_raw(struct iio_dev *indio_dev,
 		}
 		break;
 
+	case IIO_CHAN_INFO_CALIBBIAS:
+		switch (chan->type) {
+		case IIO_PROXIMITY:
+			*val = data->ps_calib;
+			ret = IIO_VAL_INT;
+
+		default:
+			break;
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	mutex_unlock(&data->ap3223_mutex);
+
+	return ret;
+}
+
+static int ap3223_write_raw(struct iio_dev *indio_dev,
+			    struct iio_chan_spec const *chan,
+			    int val,
+			    int val2,
+			    long mask)
+{
+	struct ap3223_data *data = iio_priv(indio_dev);
+	int ret = -EINVAL;
+
+	mutex_lock(&data->ap3223_mutex);
+
+	switch (mask) {
+	case IIO_CHAN_INFO_CALIBBIAS:
+		switch (chan->type) {
+		case IIO_PROXIMITY:
+			ret = ap3223_set_ps_calib(data->client, val);
+			if (ret >= 0)
+				data->ps_calib = val;
+			break;
+
+		default:
+			break;
+		}
+		break;
+
 	default:
 		break;
 	}
@@ -460,6 +564,25 @@ static int ap3223_read_event_value(struct iio_dev *indio_dev,
 	if (*val < 0)
 		ret = -EINVAL;
 
+	mutex_unlock(&data->ap3223_mutex);
+
+	return ret;
+}
+
+static int ap3223_write_event_value(struct iio_dev *indio_dev,
+				    const struct iio_chan_spec *chan,
+				    enum iio_event_type type,
+				    enum iio_event_direction dir,
+				    enum iio_event_info info,
+				    int val, int val2)
+{
+	struct ap3223_data *data = iio_priv(indio_dev);
+	int ret = 0;
+	u8 address = (dir == IIO_EV_DIR_RISING) ?
+			AP3223_REG_PS_THDH_L : AP3223_REG_PS_THDL_L;
+
+	mutex_lock(&data->ap3223_mutex);
+	ret = ap3223_set_ps_thres(data->client, address, val);
 	mutex_unlock(&data->ap3223_mutex);
 
 	return ret;
@@ -504,8 +627,10 @@ ap3223_write_event_exit:
 }
 
 static const struct iio_info ap3223_info = {
-	.read_raw		= ap3223_read_raw,
+	.read_raw		= &ap3223_read_raw,
+	.write_raw		= &ap3223_write_raw,
 	.read_event_value	= &ap3223_read_event_value,
+	.write_event_value	= &ap3223_write_event_value,
 	.read_event_config	= &ap3223_read_event_config,
 	.write_event_config	= &ap3223_write_event_config,
 	.driver_module		= THIS_MODULE,
@@ -668,6 +793,7 @@ static int ap3223_probe(struct i2c_client *client,
 
 	data->regmap = regmap;
 	data->client = client;
+	data->ps_calib = 0;
 	data->event_enabled = false;
 
 	mutex_init(&data->ap3223_mutex);
