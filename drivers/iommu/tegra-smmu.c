@@ -414,10 +414,6 @@ static int tegra_smmu_as_prepare(struct tegra_smmu *smmu,
 
 	mutex_init(&as->lock);
 
-	mutex_init(&as->lock);
-
-	mutex_init(&as->lock);
-
 	smmu_flush_ptc(smmu, as->pd_dma, 0);
 	smmu_flush_tlb_asid(smmu, as->id);
 
@@ -662,10 +658,6 @@ static int tegra_smmu_map(struct iommu_domain *domain, unsigned long iova,
 	/* If we aren't overwriting a pre-existing entry, increment use */
 	if (*pte == 0)
 		tegra_smmu_pte_get_use(as, iova);
-
-	mutex_unlock(&as->lock);
-
-	mutex_unlock(&as->lock);
 
 	mutex_unlock(&as->lock);
 
