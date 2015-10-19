@@ -64,6 +64,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_RT286 if I2C
 	select SND_SOC_RT5631 if I2C
 	select SND_SOC_RT5640 if I2C
+	select SND_SOC_RT5645 if I2C
 	select SND_SOC_RT5677 if I2C
 	select SND_SOC_SGTL5000 if I2C
 	select SND_SOC_SI476X if MFD_SI476X_CORE
@@ -335,11 +336,23 @@ config SND_SOC_RL6231
 config SND_SOC_RT286
 	tristate
 
+config SND_SOC_RL6231
+	tristate
+	default y if SND_SOC_RT5640=y
+	default y if SND_SOC_RT5645=y
+	default y if SND_SOC_RT5651=y
+	default m if SND_SOC_RT5640=m
+	default m if SND_SOC_RT5645=m
+	default m if SND_SOC_RT5651=m
+
 config SND_SOC_RT5631
 	tristate
 
 config SND_SOC_RT5640
 	tristate
+
+config SND_SOC_RT5645
+        tristate
 
 config SND_SOC_RT5677
 	tristate
