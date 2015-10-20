@@ -2662,7 +2662,7 @@ struct wireless_dev *mwifiex_add_virtual_intf(struct wiphy *wiphy,
 	}
 
 	dev = alloc_netdev_mqs(sizeof(struct mwifiex_private *), name,
-			       name_assign_type, ether_setup,
+			       ether_setup,
 			       IEEE80211_NUM_ACS, 1);
 	if (!dev) {
 		mwifiex_dbg(adapter, ERROR,

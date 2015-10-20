@@ -1722,8 +1722,7 @@ int ieee80211_if_add(struct ieee80211_local *local, const char *name,
 		if (local->hw.queues >= IEEE80211_NUM_ACS)
 			txqs = IEEE80211_NUM_ACS;
 
-		ndev = alloc_netdev_mqs(size + txq_size,
-					name, name_assign_type,
+		ndev = alloc_netdev_mqs(size + txq_size, name,
 					ieee80211_if_setup, txqs, 1);
 		if (!ndev)
 			return -ENOMEM;

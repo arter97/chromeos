@@ -2685,7 +2685,7 @@ static struct net_device *init_wifidev(struct airo_info *ai,
 					struct net_device *ethdev)
 {
 	int err;
-	struct net_device *dev = alloc_netdev(0, "wifi%d", NET_NAME_UNKNOWN,
+	struct net_device *dev = alloc_netdev(0, "wifi%d",
 					      wifi_setup);
 	if (!dev)
 		return NULL;
