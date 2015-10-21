@@ -2829,6 +2829,7 @@ static int tegra_pmc_probe(struct platform_device *pdev)
 	pmc->suspend_notifier.notifier_call = tegra_pmc_suspend_notifier;
 	register_pm_notifier(&pmc->suspend_notifier);
 #endif
+	tegra_pmc_unpowergate(TEGRA_POWERGATE_DFD);
 
 	return 0;
 }
