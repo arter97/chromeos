@@ -146,14 +146,23 @@ static int vic_power_on(struct device *dev)
 		return err;
 
 	err = tegra_pmc_unpowergate(vic->config->powergate_id);
-	if (err) {
-		falcon_power_off(&vic->falcon);
-		return err;
-	}
+	if (err)
+		goto err_power_up;
+
+	err = clk_prepare_enable(vic->clk);
+	if (err)
+		goto err_enable_clk;
 
 	clk_prepare_enable(vic->clk);
 
 	return 0;
+
+err_enable_clk:
+	tegra_pmc_powergate(vic->config->powergate_id);
+err_power_up:
+	falcon_power_off(&vic->falcon);
+
+	return err;
 }
 
 static void vic_finalize_poweron(struct vic *vic)

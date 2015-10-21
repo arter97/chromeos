@@ -38,6 +38,7 @@
 #include <linux/usb/gadget.h>
 #include <linux/workqueue.h>
 
+#include <soc/tegra/mc.h>
 #include <soc/tegra/pmc.h>
 #include <soc/tegra/xusb.h>
 
@@ -3232,7 +3233,6 @@ static int tegra_xudc_probe(struct platform_device *pdev)
 	err = tegra_pmc_unpowergate(TEGRA_POWERGATE_XUSBA);
 	if (err < 0)
 		goto disable_regulator;
-
 	err = tegra_pmc_unpowergate(TEGRA_POWERGATE_XUSBB);
 	if (err < 0)
 		goto powergate_xusba;
@@ -3313,9 +3313,7 @@ static int tegra_xudc_remove(struct platform_device *pdev)
 	tegra_xudc_free_event_ring(xudc);
 	tegra_xudc_phy_power_off(xudc);
 	tegra_xudc_clk_disable(xudc);
-	clk_disable_unprepare(xudc->dev_clk);
 	tegra_pmc_powergate(TEGRA_POWERGATE_XUSBB);
-	clk_disable_unprepare(xudc->ss_clk);
 	tegra_pmc_powergate(TEGRA_POWERGATE_XUSBA);
 	regulator_bulk_disable(xudc->soc->num_supplies, xudc->supplies);
 
@@ -3375,7 +3373,6 @@ static int tegra_xudc_unpowergate(struct tegra_xudc *xudc)
 	err = tegra_pmc_unpowergate(TEGRA_POWERGATE_XUSBB);
 	if (err < 0)
 		return err;
-
 	err = tegra_pmc_unpowergate(TEGRA_POWERGATE_XUSBA);
 	if (err < 0)
 		return err;

@@ -76,8 +76,14 @@ static int isp_power_on(struct device *dev)
 	struct isp *isp = dev_get_drvdata(dev);
 
 	ret = tegra_pmc_unpowergate(isp->config->powergate_id);
-	if (!ret)
-		clk_prepare_enable(isp->clk);
+	if (ret)
+		return ret;
+
+	ret = clk_prepare_enable(isp->clk);
+	if (ret < 0) {
+		dev_err(dev, "failed to enable clock\n");
+		tegra_pmc_powergate(isp->config->powergate_id);
+	}
 
 	return ret;
 }

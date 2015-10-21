@@ -122,7 +122,9 @@ static int tegra_ahci_power_on(struct ahci_host_priv *hpriv)
 	if (ret)
 		goto disable_regulators;
 
-	clk_prepare_enable(tegra->sata_clk);
+	ret = clk_prepare_enable(tegra->sata_clk);
+	if (ret)
+		goto err_enable_clk;
 
 	reset_control_assert(tegra->sata_oob_rst);
 	reset_control_assert(tegra->sata_cold_rst);
@@ -139,6 +141,7 @@ static int tegra_ahci_power_on(struct ahci_host_priv *hpriv)
 disable_power:
 	clk_disable_unprepare(tegra->sata_clk);
 
+err_enable_clk:
 	tegra_pmc_powergate(TEGRA_POWERGATE_SATA);
 
 disable_regulators:
@@ -158,7 +161,7 @@ static void tegra_ahci_power_off(struct ahci_host_priv *hpriv)
 	reset_control_assert(tegra->sata_cold_rst);
 
 	clk_disable_unprepare(tegra->sata_clk);
-	tegra_power_partition_power_off(TEGRA_POWERGATE_SATA);
+	tegra_powergate_power_off(TEGRA_POWERGATE_SATA);
 
 	regulator_bulk_disable(ARRAY_SIZE(tegra->supplies), tegra->supplies);
 }

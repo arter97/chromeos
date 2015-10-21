@@ -1076,7 +1076,6 @@ static int tegra_xhci_probe(struct platform_device *pdev)
 	ret = tegra_pmc_unpowergate(TEGRA_POWERGATE_XUSBA);
 	if (ret < 0)
 		goto put_hcd;
-
 	ret = tegra_pmc_unpowergate(TEGRA_POWERGATE_XUSBC);
 	if (ret < 0)
 		goto powergate_xusba;
@@ -1228,9 +1227,9 @@ static int tegra_xhci_remove(struct platform_device *pdev)
 	mbox_free_channel(tegra->mbox_chan);
 	tegra_xhci_phy_disable(tegra);
 	regulator_bulk_disable(tegra->soc->num_supplies, tegra->supplies);
+	tegra_xhci_clk_disable(tegra);
 	tegra_pmc_powergate(TEGRA_POWERGATE_XUSBC);
 	tegra_pmc_powergate(TEGRA_POWERGATE_XUSBA);
-	tegra_xhci_clk_disable(tegra);
 
 	pm_runtime_disable(tegra->dev);
 	pm_runtime_put(tegra->dev);
@@ -1462,7 +1461,6 @@ static int tegra_xhci_unpowergate(struct tegra_xhci_hcd *tegra)
 	mutex_lock(&tegra->lock);
 
 	tegra_xhci_clk_enable(tegra);
-
 	ret = regulator_bulk_enable(tegra->soc->num_supplies, tegra->supplies);
 	if (ret < 0)
 		goto unlock;

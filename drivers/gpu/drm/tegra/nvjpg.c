@@ -84,8 +84,12 @@ static int nvjpg_power_on(struct device *dev)
 		return err;
 
 	err = tegra_pmc_unpowergate(nvjpg->config->powergate_id);
-	if (!err)
-		clk_prepare_enable(nvjpg->clk);
+	if (err)
+		return err;
+
+	err = clk_prepare_enable(nvjpg->clk);
+	if (err)
+		tegra_pmc_powergate(nvjpg->config->powergate_id);
 
 	return err;
 }

@@ -135,7 +135,11 @@ static int vi_power_on(struct device *dev)
 	if (err)
 		return err;
 
-	clk_prepare_enable(vi->clk);
+	err = clk_prepare_enable(vi->clk);
+	if (err) {
+		tegra_pmc_powergate(vi->config->powergate_id);
+		return err;
+	}
 
 	err = regulator_enable(vi->reg);
 	if (err) {
