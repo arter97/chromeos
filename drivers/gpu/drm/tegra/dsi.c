@@ -1331,7 +1331,7 @@ static ssize_t tegra_dsi_host_transfer(struct mipi_dsi_host *host,
 	 * checking the current state. Further, since we only support
 	 * tegra114+ in this driver, all socs support powergate.
 	 */
-	tegra_powergate_power_on(TEGRA_POWERGATE_DIS);
+	tegra_pmc_unpowergate(TEGRA_POWERGATE_DIS);
 
 	mutex_lock(&dsi->dcs_lock);
 
@@ -1431,7 +1431,7 @@ static ssize_t tegra_dsi_host_transfer(struct mipi_dsi_host *host,
 
 out:
 	mutex_unlock(&dsi->dcs_lock);
-	tegra_powergate_power_off(TEGRA_POWERGATE_DIS);
+	tegra_pmc_powergate(TEGRA_POWERGATE_DIS);
 
 	return err;
 }

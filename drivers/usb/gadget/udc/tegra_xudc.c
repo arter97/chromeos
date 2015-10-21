@@ -3229,11 +3229,11 @@ static int tegra_xudc_probe(struct platform_device *pdev)
 		goto disable_regulator;
 	}
 
-	err = tegra_powergate_power_on(TEGRA_POWERGATE_XUSBA);
+	err = tegra_pmc_unpowergate(TEGRA_POWERGATE_XUSBA);
 	if (err < 0)
 		goto disable_regulator;
 
-	err = tegra_powergate_power_on(TEGRA_POWERGATE_XUSBB);
+	err = tegra_pmc_unpowergate(TEGRA_POWERGATE_XUSBB);
 	if (err < 0)
 		goto powergate_xusba;
 
@@ -3292,9 +3292,9 @@ disable_phy:
 disable_clk:
 	tegra_xudc_clk_disable(xudc);
 powergate_xusbb:
-	tegra_powergate_power_off(TEGRA_POWERGATE_XUSBB);
+	tegra_pmc_powergate(TEGRA_POWERGATE_XUSBB);
 powergate_xusba:
-	tegra_powergate_power_off(TEGRA_POWERGATE_XUSBA);
+	tegra_pmc_powergate(TEGRA_POWERGATE_XUSBA);
 disable_regulator:
 	regulator_bulk_disable(xudc->soc->num_supplies, xudc->supplies);
 	return err;
@@ -3314,9 +3314,9 @@ static int tegra_xudc_remove(struct platform_device *pdev)
 	tegra_xudc_phy_power_off(xudc);
 	tegra_xudc_clk_disable(xudc);
 	clk_disable_unprepare(xudc->dev_clk);
-	tegra_powergate_power_off(TEGRA_POWERGATE_XUSBB);
+	tegra_pmc_powergate(TEGRA_POWERGATE_XUSBB);
 	clk_disable_unprepare(xudc->ss_clk);
-	tegra_powergate_power_off(TEGRA_POWERGATE_XUSBA);
+	tegra_pmc_powergate(TEGRA_POWERGATE_XUSBA);
 	regulator_bulk_disable(xudc->soc->num_supplies, xudc->supplies);
 
 	pm_runtime_disable(xudc->dev);
@@ -3344,8 +3344,8 @@ static int tegra_xudc_powergate(struct tegra_xudc *xudc)
 
 	tegra_xudc_clk_disable(xudc);
 
-	tegra_powergate_power_off(TEGRA_POWERGATE_XUSBA);
-	tegra_powergate_power_off(TEGRA_POWERGATE_XUSBB);
+	tegra_pmc_powergate(TEGRA_POWERGATE_XUSBA);
+	tegra_pmc_powergate(TEGRA_POWERGATE_XUSBB);
 
 	phy_exit(xudc->usb3_phy);
 	phy_exit(xudc->utmi_phy);
@@ -3372,11 +3372,11 @@ static int tegra_xudc_unpowergate(struct tegra_xudc *xudc)
 	phy_init(xudc->usb3_phy);
 	phy_init(xudc->utmi_phy);
 
-	err = tegra_powergate_power_on(TEGRA_POWERGATE_XUSBB);
+	err = tegra_pmc_unpowergate(TEGRA_POWERGATE_XUSBB);
 	if (err < 0)
 		return err;
 
-	err = tegra_powergate_power_on(TEGRA_POWERGATE_XUSBA);
+	err = tegra_pmc_unpowergate(TEGRA_POWERGATE_XUSBA);
 	if (err < 0)
 		return err;
 

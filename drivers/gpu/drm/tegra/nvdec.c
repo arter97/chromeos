@@ -75,7 +75,7 @@ static int nvdec_power_off(struct device *dev)
 
 	clk_disable_unprepare(nvdec->clk);
 	clk_disable_unprepare(nvdec->cbus_clk);
-	err = tegra_powergate_power_off(nvdec->config->powergate_id);
+	err = tegra_pmc_powergate(nvdec->config->powergate_id);
 	if (err)
 		return err;
 
@@ -97,7 +97,7 @@ static int nvdec_power_on(struct device *dev)
 	if (err)
 		goto err_emc_clk;
 
-	err = tegra_powergate_power_on(nvdec->config->powergate_id);
+	err = tegra_pmc_unpowergate(nvdec->config->powergate_id);
 	if (err)
 		goto err_unpowergate;
 
@@ -109,7 +109,7 @@ static int nvdec_power_on(struct device *dev)
 	return 0;
 
 err_nvdec_cbus_clk:
-	tegra_powergate_power_off(nvdec->config->powergate_id);
+	tegra_pmc_powergate(nvdec->config->powergate_id);
 err_unpowergate:
 	clk_disable_unprepare(nvdec->emc_clk);
 err_emc_clk:

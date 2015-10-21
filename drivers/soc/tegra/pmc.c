@@ -764,10 +764,10 @@ err_pg_clk_enable:
 }
 
 /**
- * tegra_powergate_power_on() - power up partition with dependency
+ * tegra_pmc_unpowergate() - power up partition with dependency
  * @id: partition ID
  */
-int tegra_powergate_power_on(int id)
+int tegra_pmc_unpowergate(int id)
 {
 	struct tegra_powergate *pg;
 	int ret = 0;
@@ -785,13 +785,13 @@ int tegra_powergate_power_on(int id)
 
 	return tegra_powergate_sequence_power_up(id);
 }
-EXPORT_SYMBOL(tegra_powergate_power_on);
+EXPORT_SYMBOL(tegra_pmc_unpowergate);
 
 /**
- * tegra_powergate_power_off() - power down partition with dependency
+ * tegra_pmc_powergate() - power down partition with dependency
  * @id: partition ID
  */
-int tegra_powergate_power_off(int id)
+int tegra_pmc_powergate(int id)
 {
 	struct tegra_powergate *pg;
 	int ret = 0;
@@ -810,7 +810,7 @@ int tegra_powergate_power_off(int id)
 
 	return ret;
 }
-EXPORT_SYMBOL(tegra_powergate_power_off);
+EXPORT_SYMBOL(tegra_pmc_powergate);
 
 #ifdef CONFIG_SMP
 /**
@@ -2770,7 +2770,7 @@ static int tegra_powergate_init(struct tegra_pmc *pmc,
 	 * i2c6 needs dpaux and sor0 enabled, so forcibly enable
 	 * SOR power partition first
 	 */
-	tegra_powergate_power_on(TEGRA_POWERGATE_SOR);
+	tegra_pmc_unpowergate(TEGRA_POWERGATE_SOR);
 
 	return ret;
 }

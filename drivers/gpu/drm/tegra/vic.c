@@ -133,7 +133,7 @@ static int vic_power_off(struct device *dev)
 
 	clk_disable_unprepare(vic->clk);
 
-	return tegra_powergate_power_off(vic->config->powergate_id);
+	return tegra_pmc_powergate(vic->config->powergate_id);
 }
 
 static int vic_power_on(struct device *dev)
@@ -145,7 +145,7 @@ static int vic_power_on(struct device *dev)
 	if (err)
 		return err;
 
-	err = tegra_powergate_power_on(vic->config->powergate_id);
+	err = tegra_pmc_unpowergate(vic->config->powergate_id);
 	if (err) {
 		falcon_power_off(&vic->falcon);
 		return err;

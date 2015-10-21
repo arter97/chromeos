@@ -1307,7 +1307,7 @@ static void tegra_crtc_disable(struct drm_crtc *crtc)
 
 	dc->reg_initialized = false;
 	if (dc->is_powered) {
-		tegra_powergate_power_off(dc->powergate);
+		tegra_pmc_powergate(dc->powergate);
 		dc->is_powered = false;
 	}
 }
@@ -1476,7 +1476,7 @@ static void tegra_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	u32 value;
 
 	if (!dc->is_powered) {
-		tegra_powergate_power_on(dc->powergate);
+		tegra_pmc_unpowergate(dc->powergate);
 		dc->is_powered = true;
 	}
 	tegra_dc_init_hw(dc);
@@ -2412,7 +2412,7 @@ static int tegra_dc_probe(struct platform_device *pdev)
 		tegra_slcg_register_notifier(dc->powergate,
 			&dc->slcg_notifier);
 
-		err = tegra_powergate_power_on(dc->powergate);
+		err = tegra_pmc_unpowergate(dc->powergate);
 		if (err < 0) {
 			dev_err(&pdev->dev, "failed to power partition: %d\n",
 				err);
@@ -2499,7 +2499,7 @@ static int tegra_dc_remove(struct platform_device *pdev)
 			&dc->slcg_notifier);
 
 	if (dc->soc->has_powergate)
-		tegra_powergate_power_off(dc->powergate);
+		tegra_pmc_powergate(dc->powergate);
 
 	clk_disable_unprepare(dc->clk);
 	clk_disable_unprepare(dc->emc_clk);
