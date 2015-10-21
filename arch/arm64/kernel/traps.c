@@ -255,6 +255,7 @@ void arm64_notify_die(const char *str, struct pt_regs *regs,
 		current->thread.fault_code = err;
 		force_sig_info(info->si_signo, info, current);
 	} else {
+		panic("arm_notify_die: early die for factory.");
 		die(str, regs, err);
 	}
 }
