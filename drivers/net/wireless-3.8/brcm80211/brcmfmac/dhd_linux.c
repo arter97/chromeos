@@ -974,15 +974,11 @@ fail:
 			brcmf_fws_deinit(drvr);
 		}
 		if (drvr->iflist[0]) {
-			if (ifp->ndev->destructor == NULL)
-				brcmf_free_vif(ifp->vif);
-			free_netdev(ifp->ndev);
+			brcmf_cfg80211_free_netdev(ifp->ndev);
 			drvr->iflist[0] = NULL;
 		}
 		if (p2p_ifp) {
-			if (p2p_ifp->ndev->destructor == NULL)
-				brcmf_free_vif(p2p_ifp->vif);
-			free_netdev(p2p_ifp->ndev);
+			brcmf_cfg80211_free_netdev(p2p_ifp->ndev);
 			drvr->iflist[1] = NULL;
 		}
 		return ret;
