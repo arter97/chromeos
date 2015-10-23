@@ -6046,6 +6046,7 @@ wiphy_unreg_out:
 priv_out:
 	wl_deinit_priv(cfg);
 	brcmf_free_vif(vif);
+	ifp->vif = NULL;
 wiphy_out:
 	brcmf_free_wiphy(wiphy);
 	return NULL;
