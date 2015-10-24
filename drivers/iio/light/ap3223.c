@@ -382,11 +382,20 @@ static int ap3223_sw_reset(struct i2c_client *client)
 {
 	struct ap3223_data *data = iio_priv(i2c_get_clientdata(client));
 	int err = 0;
+	int retry = 15;
 
-	err = regmap_write(data->regmap, AP3223_REG_SYS_CTRL,
-		     AP3223_SYS_DEV_RESET);
+	for (; retry; retry--) {
+		err = regmap_write(data->regmap, AP3223_REG_SYS_CTRL,
+				   AP3223_SYS_DEV_RESET);
+
+		if (err >= 0)
+			break;
+
+		usleep_range(1000, 2000);
+	}
+
 	if (err < 0)
-		dev_err(&client->dev, "Failed to set mode\n");
+		dev_err(&client->dev, "SW Reset: Failed to set mode\n");
 
 	return err;
 }
@@ -675,19 +684,31 @@ static int ap3223_init_reg_config(struct i2c_client *client)
 	for (i = 0; i < ARRAY_SIZE(ap3223_initial_reg_conf); i += 2) {
 		/*
 		 * Taking care of transient i2c failures during init.
-		 * Usually succeedes at first retry.
+		 * The delay outside the loop helps to avoid the write failures
+		 * completely (never saw a single failure during test). However,
+		 * the inner loop is retained to recover from the NACK errors
+		 * that were observed before the introduction of the outer
+		 * delay.
+		 *
+		 * The value of 1000us (for all the usleep_range used in this
+		 * file), were arrived at by testing the device and verifying
+		 * that there were no errors.
+		 *
+		 * No failure is observed with these delays in about 500+
+		 * cycles of reboot and load and unload of modules (without
+		 * any gap in between) over 15 hours.
 		 */
+
 		int retry = 15;
+
+		usleep_range(1000, 2000);
 
 		for (; retry; retry--) {
 			if (regmap_write(data->regmap,
 					 ap3223_initial_reg_conf[i],
 					 ap3223_initial_reg_conf[i + 1]) >= 0)
 				break;
-			/*
-			 * Testing shows 1000us delay is sufficient for AP3223
-			 * to recover from failed write in one retry.
-			 */
+
 			usleep_range(1000, 2000);
 		}
 
