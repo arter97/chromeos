@@ -1368,6 +1368,16 @@ static bool ieee80211_tx_frags(struct ieee80211_local *local,
 				}
 			} else {
 
+#ifdef CONFIG_QCA_NSS_DRV
+				if (skb_queue_len(&local->pending[q]) >= 500) {
+					spin_unlock_irqrestore(
+						&local->queue_stop_reason_lock,
+						flags);
+					ieee80211_purge_tx_queue(&local->hw,
+								 skbs);
+					return false;
+				}
+#endif
 				/*
 				 * Since queue is stopped, queue up frames for
 				 * later transmission from the tx-pending
@@ -2936,17 +2946,12 @@ void __ieee80211_subif_start_xmit(struct sk_buff *skb,
 netdev_tx_t ieee80211_subif_start_xmit(struct sk_buff *skb,
 				       struct net_device *dev)
 {
-	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
-	struct ieee80211_local *local = sdata->local;
-
 	if (unlikely(skb->len < ETH_HLEN)) {
 		kfree_skb(skb);
 		return NETDEV_TX_OK;
 	}
 
 #ifdef CONFIG_QCA_NSS_DRV
-	if (ieee80211_queues_stopped(&local->hw, sdata))
-		return NETDEV_TX_BUSY;
 	/* Packets from NSS does not have valid protocol, priority and other
 	 * network stack values. Derive required parameters (priority
 	 * and network_header) from payload for QoS header.

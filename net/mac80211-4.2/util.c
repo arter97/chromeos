@@ -533,29 +533,6 @@ int ieee80211_queue_stopped(struct ieee80211_hw *hw, int queue)
 }
 EXPORT_SYMBOL(ieee80211_queue_stopped);
 
-int ieee80211_queues_stopped(struct ieee80211_hw *hw, void *sdata)
-{
-	struct ieee80211_local *local = hw_to_local(hw);
-	unsigned long flags;
-	unsigned long queues;
-	int i, ret;
-
-	queues = ieee80211_get_vif_queues(local,
-				(struct ieee80211_sub_if_data *)sdata);
-	spin_lock_irqsave(&local->queue_stop_reason_lock, flags);
-
-	for_each_set_bit(i, &queues, hw->queues) {
-		ret = test_bit(IEEE80211_QUEUE_STOP_REASON_DRIVER,
-			       &local->queue_stop_reasons[i]);
-		if (ret)
-			break;
-	}
-
-	spin_unlock_irqrestore(&local->queue_stop_reason_lock, flags);
-	return ret;
-}
-EXPORT_SYMBOL(ieee80211_queues_stopped);
-
 void ieee80211_wake_queues_by_reason(struct ieee80211_hw *hw,
 				     unsigned long queues,
 				     enum queue_stop_reason reason,
