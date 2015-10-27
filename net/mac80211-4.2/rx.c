@@ -2119,7 +2119,7 @@ ieee80211_deliver_skb(struct ieee80211_rx_data *rx)
 		}
 	}
 
-#ifndef CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS
+#if !defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS) || defined(CONFIG_QCA_NSS_DRV)
 	if (skb) {
 		/* 'align' will only take the values 0 or 2 here since all
 		 * frames are required to be aligned to 2-byte boundaries
