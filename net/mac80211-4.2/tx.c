@@ -2945,7 +2945,7 @@ netdev_tx_t ieee80211_subif_start_xmit(struct sk_buff *skb,
 	}
 
 #ifdef CONFIG_QCA_NSS_DRV
-	if (ieee80211_queues_stopped(&local->hw))
+	if (ieee80211_queues_stopped(&local->hw, sdata))
 		return NETDEV_TX_BUSY;
 	/* Packets from NSS does not have valid protocol, priority and other
 	 * network stack values. Derive required parameters (priority

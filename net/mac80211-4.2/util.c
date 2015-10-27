@@ -533,13 +533,15 @@ int ieee80211_queue_stopped(struct ieee80211_hw *hw, int queue)
 }
 EXPORT_SYMBOL(ieee80211_queue_stopped);
 
-int ieee80211_queues_stopped(struct ieee80211_hw *hw)
+int ieee80211_queues_stopped(struct ieee80211_hw *hw, void *sdata)
 {
 	struct ieee80211_local *local = hw_to_local(hw);
 	unsigned long flags;
-	unsigned long queues = IEEE80211_MAX_QUEUE_MAP;
+	unsigned long queues;
 	int i, ret;
 
+	queues = ieee80211_get_vif_queues(local,
+				(struct ieee80211_sub_if_data *)sdata);
 	spin_lock_irqsave(&local->queue_stop_reason_lock, flags);
 
 	for_each_set_bit(i, &queues, hw->queues) {

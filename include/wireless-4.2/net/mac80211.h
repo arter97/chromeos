@@ -4496,7 +4496,7 @@ int ieee80211_queue_stopped(struct ieee80211_hw *hw, int queue);
  * Return: %true if any queue is stopped. %false otherwise.
  */
 
-int ieee80211_queues_stopped(struct ieee80211_hw *hw);
+int ieee80211_queues_stopped(struct ieee80211_hw *hw, void *sdata);
 
 /**
  * ieee80211_stop_queues - stop all queues
