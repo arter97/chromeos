@@ -1369,7 +1369,7 @@ static bool ieee80211_tx_frags(struct ieee80211_local *local,
 			} else {
 
 #ifdef CONFIG_QCA_NSS_DRV
-				if (skb_queue_len(&local->pending[q]) >= 500) {
+				if (skb_queue_len(&local->pending[q]) >= 1000) {
 					spin_unlock_irqrestore(
 						&local->queue_stop_reason_lock,
 						flags);
