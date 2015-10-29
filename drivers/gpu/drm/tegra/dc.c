@@ -2418,14 +2418,7 @@ static int tegra_dc_probe(struct platform_device *pdev)
 				err);
 			return err;
 		}
-
-		err = clk_prepare_enable(dc->clk);
-		if (err < 0) {
-			tegra_pmc_powergate(dc->powergate);
-			dev_err(&pdev->dev, "failed to enable clock: %d\n",
-				err);
-			return err;
-		}
+		clk_prepare_enable(dc->clk);
 		dc->is_powered = true;
 	} else {
 		err = clk_prepare_enable(dc->clk);
