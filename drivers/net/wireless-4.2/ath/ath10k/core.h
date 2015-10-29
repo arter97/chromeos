@@ -537,6 +537,10 @@ enum ath10k_crypt_mode {
 	ATH10K_CRYPT_MODE_SW,
 };
 
+enum ath10k_wlan_interfrc_mask {
+	ATH10K_SPECTRAL_INTERFRC	= 0x00000001,
+};
+
 static inline const char *ath10k_cal_mode_str(enum ath10k_cal_mode mode)
 {
 	switch (mode) {
@@ -814,6 +818,8 @@ struct ath10k {
 		/* spectral_mode and spec_config are protected by conf_mutex */
 		enum ath10k_spectral_mode mode;
 		struct ath10k_spec_scan config;
+		u32 interfrc_5g;
+		u32 interfrc_2g;
 	} spectral;
 
 	struct {
@@ -832,6 +838,9 @@ struct ath10k {
 		u32 fw_warm_reset_counter;
 		u32 fw_cold_reset_counter;
 	} stats;
+
+	/* Detect the adjacent wifi radio interference */
+	enum ath10k_wlan_interfrc_mask wlan_interfrc_mask;
 
 	struct ath10k_thermal thermal;
 	struct ath10k_wow wow;

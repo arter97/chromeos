@@ -5410,6 +5410,11 @@ static struct sk_buff *ath10k_wmi_10_2_op_gen_init(struct ath10k *ar)
 	if (ar->btc_feature &&
 	    test_bit(WMI_SERVICE_COEX_GPIO, ar->wmi.svc_map))
 		features |= WMI_10_2_COEX_GPIO;
+
+	if ((ar->wlan_interfrc_mask & ATH10K_SPECTRAL_INTERFRC) &&
+	    (test_bit(WMI_SERVICE_AUX_SPECTRAL_INTF, ar->wmi.svc_map)))
+		features |= WMI_10_2_ADJ_RADIO_SPECTRAL_INTERFRC;
+
 	cmd->resource_config.feature_mask = __cpu_to_le32(features);
 
 #ifdef CONFIG_ATH10K_SMART_ANTENNA

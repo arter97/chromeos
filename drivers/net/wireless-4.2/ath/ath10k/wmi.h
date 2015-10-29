@@ -206,6 +206,7 @@ enum wmi_10x_service {
 	WMI_10X_SERVICE_SMART_ANTENNA_HW_SUPPORT,
 	WMI_10X_SERVICE_ATF,
 	WMI_10X_SERVICE_COEX_GPIO,
+	WMI_10X_SERVICE_ADJ_RADIO_SPECTRAL_INTERFRC,
 };
 
 enum wmi_main_service {
@@ -442,6 +443,8 @@ static inline void wmi_10x_svc_map(const __le32 *in, unsigned long *out,
 	       WMI_SERVICE_ATF, len);
 	SVCMAP(WMI_10X_SERVICE_COEX_GPIO,
 	       WMI_SERVICE_COEX_GPIO, len);
+	SVCMAP(WMI_10X_SERVICE_ADJ_RADIO_SPECTRAL_INTERFRC,
+	       WMI_SERVICE_AUX_SPECTRAL_INTF, len);
 }
 
 static inline void wmi_main_svc_map(const __le32 *in, unsigned long *out,
@@ -2391,6 +2394,7 @@ enum wmi_10_2_feature_mask {
 	WMI_10_2_RX_BATCH_MODE = BIT(0),
 	WMI_10_2_ATF_CONFIG    = BIT(1),
 	WMI_10_2_COEX_GPIO     = BIT(3),
+	WMI_10_2_ADJ_RADIO_SPECTRAL_INTERFRC	= BIT(4),
 };
 
 struct wmi_resource_config_10_2 {
@@ -3012,6 +3016,9 @@ enum phy_err_type {
 	PHY_ERROR_FALSE_RADAR_EXT,
 	PHY_ERROR_RADAR
 };
+
+#define PHYERR_FLAG_INTERFRC_5G			0x01
+#define PHYERR_FLAG_INTERFRC_2G			0x02
 
 struct wmi_phyerr {
 	__le32 tsf_timestamp;
@@ -5865,6 +5872,7 @@ struct wmi_phyerr_ev_arg {
 	u8 rssi_combined;
 	u8 chan_width_mhz;
 	u8 phy_err_code;
+	u8 rsvd0;
 	u16 nf_chains[4];
 	u32 buf_len;
 	const u8 *buf;
