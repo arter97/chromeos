@@ -26,6 +26,7 @@
 
 #include "htc.h"
 #include "rx_desc.h"
+#include "hw.h"
 
 enum htt_dbg_stats_type {
 	HTT_DBG_STATS_WAL_PDEV_TXRX = 1 << 0,
@@ -1324,6 +1325,11 @@ struct ath10k_htt {
 
 	const enum htt_t2h_msg_type *t2h_msg_types;
 	u32 t2h_msg_types_max;
+
+	/* tx status rate reporting */
+	struct ieee80211_tx_rate tx_rate;
+	enum tx_ppdu_bw tx_bw;
+	u32 tx_series;
 
 	struct {
 		/*

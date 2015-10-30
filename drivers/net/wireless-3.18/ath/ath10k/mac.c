@@ -2960,6 +2960,13 @@ static int ath10k_start(struct ieee80211_hw *hw)
 		goto err_core_stop;
 	}
 
+	/* This is used for tx status rate reporting */
+	ret = ath10k_wmi_pdev_pktlog_enable(ar, ATH10K_PKTLOG_TX);
+	if (ret) {
+		ath10k_warn(ar, "failed to enable tx pktlog: %d\n", ret);
+		goto err_core_stop;
+	}
+
 	if (ar->cfg_tx_chainmask)
 		__ath10k_set_antenna(ar, ar->cfg_tx_chainmask,
 				     ar->cfg_rx_chainmask);
