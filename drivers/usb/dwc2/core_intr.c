@@ -45,6 +45,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
 #include <linux/slab.h>
+#include <linux/reset.h>
 #include <linux/usb.h>
 
 #include <linux/usb/hcd.h>
@@ -378,6 +379,19 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 			/* Restart the Phy Clock */
 			pcgcctl &= ~PCGCTL_STOPPCLK;
 			dwc2_writel(pcgcctl, hsotg->regs + PCGCTL);
+
+			/*
+			 * If we've got this quirk then the PHY is stuck upon
+			 * wakeup.  Assert reset.  This will propagate out and
+			 * eventually we'll re-enumerate the device.  Not great
+			 * but the best we can do.
+			 */
+			if (hsotg->need_phy_full_reset_on_wake) {
+				reset_control_assert(hsotg->phy_full_reset);
+				udelay(50);
+				reset_control_deassert(hsotg->phy_full_reset);
+			}
+
 			mod_timer(&hsotg->wkp_timer,
 				  jiffies + msecs_to_jiffies(71));
 		} else {

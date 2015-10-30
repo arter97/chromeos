@@ -45,6 +45,7 @@
 #include <linux/platform_device.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_data/s3c-hsotg.h>
+#include <linux/reset.h>
 #include <linux/usb.h>
 
 #include <linux/usb/hcd.h>
@@ -408,6 +409,18 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	 */
 	if (hsotg->need_phy_for_wake)
 		device_set_wakeup_capable(&dev->dev, true);
+
+	hsotg->need_phy_full_reset_on_wake =
+		of_property_read_bool(dev->dev.of_node,
+				      "snps,need-phy-full-reset-on-wake");
+	hsotg->phy_full_reset = devm_reset_control_get(hsotg->dev,
+						       "phy-full-reset");
+	if (IS_ERR(hsotg->phy_full_reset) &&
+	    hsotg->need_phy_full_reset_on_wake) {
+		dev_warn(hsotg->dev, "Missing phy full reset (%ld); skipping\n",
+			 PTR_ERR(hsotg->phy_full_reset));
+		hsotg->need_phy_full_reset_on_wake = false;
+	}
 
 	retval = dwc2_lowlevel_hw_init(hsotg);
 	if (retval)
