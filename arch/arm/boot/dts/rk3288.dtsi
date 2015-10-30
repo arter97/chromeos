@@ -439,6 +439,9 @@
 		dr_mode = "host";
 		phys = <&usbphy2>;
 		phy-names = "usb2-phy";
+		resets = <&cru SRST_USBHOST1_PHY>;
+		reset-names = "phy-full-reset";
+		snps,need-phy-full-reset-on-wake;
 		status = "disabled";
 	};
 
@@ -456,6 +459,8 @@
 		g-use-dma;
 		phys = <&usbphy0>;
 		phy-names = "usb2-phy";
+		resets = <&cru SRST_USBOTG_PHY>;
+		reset-names = "phy-full-reset";
 		status = "disabled";
 	};
 
