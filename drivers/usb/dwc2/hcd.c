@@ -2415,6 +2415,7 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)
 	unsigned long flags;
 	int ret = 0;
 	u32 hprt0;
+	u32 pcgctl;
 
 	spin_lock_irqsave(&hsotg->lock, flags);
 
@@ -2424,27 +2425,41 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)
 	if (!HCD_HW_ACCESSIBLE(hcd))
 		goto unlock;
 
-	if (!hsotg->core_params->hibernation)
-		goto skip_power_saving;
-
 	/*
 	 * Drive USB suspend and disable port Power
 	 * if usb bus is not suspended.
 	 */
 	if (!hsotg->bus_suspended) {
 		hprt0 = dwc2_read_hprt0(hsotg);
-		hprt0 |= HPRT0_SUSP;
-		hprt0 &= ~HPRT0_PWR;
-		dwc2_writel(hprt0, hsotg->regs + HPRT0);
+		if (hprt0 & HPRT0_CONNSTS) {
+			hprt0 |= HPRT0_SUSP;
+			if (hsotg->core_params->hibernation)
+				hprt0 &= ~HPRT0_PWR;
+			dwc2_writel(hprt0, hsotg->regs + HPRT0);
+		}
+
+		if (!hsotg->core_params->hibernation) {
+			pcgctl = readl(hsotg->regs + PCGCTL);
+			pcgctl |= PCGCTL_STOPPCLK;
+			writel(pcgctl, hsotg->regs + PCGCTL);
+		}
 	}
 
-	/* Enter hibernation */
-	ret = dwc2_enter_hibernation(hsotg);
-	if (ret) {
-		if (ret != -ENOTSUPP)
-			dev_err(hsotg->dev,
-				"enter hibernation failed\n");
-		goto skip_power_saving;
+	if (hsotg->core_params->hibernation) {
+		/* Enter hibernation */
+		ret = dwc2_enter_hibernation(hsotg);
+		if (ret) {
+			if (ret != -ENOTSUPP)
+				dev_err(hsotg->dev,
+					"enter hibernation failed\n");
+			goto skip_power_saving;
+		}
+
+		/*
+		 * After entering hibernation, hardware is no
+		 * more accessible
+		 */
+		clear_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
 	}
 
 	/* Ask phy to be suspended */
@@ -2453,9 +2468,6 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)
 		usb_phy_set_suspend(hsotg->uphy, true);
 		spin_lock_irqsave(&hsotg->lock, flags);
 	}
-
-	/* After entering hibernation, hardware is no more accessible */
-	clear_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
 
 skip_power_saving:
 	hsotg->lx_state = DWC2_L2;
@@ -2469,23 +2481,13 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)
 {
 	struct dwc2_hsotg *hsotg = dwc2_hcd_to_hsotg(hcd);
 	unsigned long flags;
+	u32 pcgctl;
 	int ret = 0;
 
 	spin_lock_irqsave(&hsotg->lock, flags);
 
 	if (hsotg->lx_state != DWC2_L2)
 		goto unlock;
-
-	if (!hsotg->core_params->hibernation) {
-		hsotg->lx_state = DWC2_L0;
-		goto unlock;
-	}
-
-	/*
-	 * Set HW accessible bit before powering on the controller
-	 * since an interrupt may rise.
-	 */
-	set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
 
 	/*
 	 * Enable power if not already done.
@@ -2498,10 +2500,22 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)
 		spin_lock_irqsave(&hsotg->lock, flags);
 	}
 
-	/* Exit hibernation */
-	ret = dwc2_exit_hibernation(hsotg, true);
-	if (ret && (ret != -ENOTSUPP))
-		dev_err(hsotg->dev, "exit hibernation failed\n");
+	if (hsotg->core_params->hibernation) {
+		/*
+		 * Set HW accessible bit before powering on the controller
+		 * since an interrupt may rise.
+		 */
+		set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
+
+		/* Exit hibernation */
+		ret = dwc2_exit_hibernation(hsotg, true);
+		if (ret && (ret != -ENOTSUPP))
+			dev_err(hsotg->dev, "exit hibernation failed\n");
+	} else {
+		pcgctl = readl(hsotg->regs + PCGCTL);
+		pcgctl &= ~PCGCTL_STOPPCLK;
+		writel(pcgctl, hsotg->regs + PCGCTL);
+	}
 
 	hsotg->lx_state = DWC2_L0;
 
@@ -2514,7 +2528,8 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)
 		dwc2_port_resume(hsotg);
 	} else {
 		/* Wait for controller to correctly update D+/D- level */
-		usleep_range(3000, 5000);
+		if (hsotg->core_params->hibernation)
+			usleep_range(3000, 5000);
 
 		/*
 		 * Clear Port Enable and Port Status changes.
