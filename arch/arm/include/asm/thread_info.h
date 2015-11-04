@@ -79,7 +79,20 @@ struct thread_info {
 #endif
 	struct restart_block	restart_block;
 	struct arm_restart_block	arm_restart_block;
+#ifdef CONFIG_ALT_SYSCALL
+	unsigned int		nr_syscalls;
+	void			*sys_call_table;
+#endif
 };
+
+#ifdef CONFIG_ALT_SYSCALL
+extern const unsigned long sys_call_table[];
+#define INIT_THREAD_INFO_SYSCALL					\
+	.nr_syscalls	= __NR_syscalls,				\
+	.sys_call_table	= &sys_call_table,
+#else
+#define INIT_THREAD_INFO_SYSCALL
+#endif
 
 #define INIT_THREAD_INFO(tsk)						\
 {									\
@@ -94,6 +107,7 @@ struct thread_info {
 	.restart_block	= {						\
 		.fn	= do_no_restart_syscall,			\
 	},								\
+	INIT_THREAD_INFO_SYSCALL					\
 }
 
 #define init_thread_info	(init_thread_union.thread_info)
