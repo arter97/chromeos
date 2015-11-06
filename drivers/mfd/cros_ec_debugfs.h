@@ -28,7 +28,8 @@
  *
  * @ec: EC device this debugfs information belongs to
  * @dir: dentry for debugfs files
- * @log_buffer: circular buffer for console log information
+ * @log_cb_buffer: circular buffer for console log information
+ * @log_buffer: buffer for console log command
  * @log_may_have_dropped: true if the buffer has filled during a poll
  * @log_mutex: mutex to protect circular buffer
  * @log_wq: waitqueue for log readers
@@ -37,9 +38,10 @@
 struct cros_ec_debugfs {
 	struct cros_ec_dev *ec;
 	struct dentry *dir;
-	struct circ_buf log_buffer;
-	bool log_may_have_dropped;
+	struct circ_buf log_cb_buffer;
+	u8 *log_buffer;
 	struct mutex log_mutex;
+	bool data_available;
 	wait_queue_head_t log_wq;
 	struct delayed_work log_poll_work;
 };
