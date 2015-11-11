@@ -1712,6 +1712,7 @@ void dwc2_hc_start_transfer(struct dwc2_hsotg *hsotg,
 	u32 hcchar;
 	u32 hctsiz = 0;
 	u16 num_packets;
+	u32 ec_mc;
 
 	if (dbg_hc(chan))
 		dev_vdbg(hsotg->dev, "%s()\n", __func__);
@@ -1748,6 +1749,13 @@ void dwc2_hc_start_transfer(struct dwc2_hsotg *hsotg,
 
 		hctsiz |= chan->xfer_len << TSIZ_XFERSIZE_SHIFT &
 			  TSIZ_XFERSIZE_MASK;
+
+		/* For split set ec_mc for immediate retries */
+		if (chan->ep_type == USB_ENDPOINT_XFER_INT ||
+		    chan->ep_type == USB_ENDPOINT_XFER_ISOC)
+			ec_mc = 3;
+		else
+			ec_mc = 1;
 	} else {
 		if (dbg_hc(chan))
 			dev_vdbg(hsotg->dev, "no split\n");
@@ -1810,6 +1818,9 @@ void dwc2_hc_start_transfer(struct dwc2_hsotg *hsotg,
 
 		hctsiz |= chan->xfer_len << TSIZ_XFERSIZE_SHIFT &
 			  TSIZ_XFERSIZE_MASK;
+
+		/* The ec_mc gets the multi_count for non-split */
+		ec_mc = chan->multi_count;
 	}
 
 	chan->start_pkt_count = num_packets;
@@ -1860,8 +1871,7 @@ void dwc2_hc_start_transfer(struct dwc2_hsotg *hsotg,
 
 	hcchar = readl(hsotg->regs + HCCHAR(chan->hc_num));
 	hcchar &= ~HCCHAR_MULTICNT_MASK;
-	hcchar |= chan->multi_count << HCCHAR_MULTICNT_SHIFT &
-		  HCCHAR_MULTICNT_MASK;
+	hcchar |= (ec_mc << HCCHAR_MULTICNT_SHIFT) & HCCHAR_MULTICNT_MASK;
 	dwc2_hc_set_even_odd_frame(hsotg, chan, &hcchar);
 
 	if (hcchar & HCCHAR_CHDIS)
