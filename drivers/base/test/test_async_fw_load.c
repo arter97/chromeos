@@ -9,6 +9,16 @@
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
+ *
+ * Test if asynchronous firmware request mechanism has a
+ * use-after-free/data-race on the firmware name field. Looks for an aribtrary
+ * "firmware" (just fill it with a bit of junk) at
+ * /lib/firmware/test_module_stuff.bin". A return code of '0' from the module
+ * init function means the firmware load succeeded. A non-zero return code
+ * likely means there request_firmware_nowait() is still racy.
+ *
+ * Note that a successful request doesn't mean there is no bug; we may have
+ * just "won" the race.
  */
 
 #include <linux/kernel.h>
@@ -16,8 +26,11 @@
 #include <linux/firmware.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/completion.h>
 
 static struct platform_device *pdev;
+static DECLARE_COMPLETION(fw_done);
+static int fw_found;
 
 struct test_stuff {
 	char name[1024];
@@ -27,9 +40,12 @@ static void test_mod_cb(const struct firmware *fw, void *context)
 {
 	if (!fw) {
 		pr_info("No firmware found\n");
+	} else {
+		pr_info("firmware found\n");
+		fw_found = 1;
 	}
-	pr_info("firmware found\n");
 	release_firmware(fw);
+	complete(&fw_done);
 }
 
 static int __init test_init(void)
@@ -58,6 +74,22 @@ static int __init test_init(void)
 	if (ret)
 		goto out;
 	kfree(stuff);
+	stuff = NULL; /* don't try to kfree() it again on error */
+
+	/*
+	 * Even though we're testing asnc firmware loads, we still want to
+	 * report whether the request succeeded or not
+	 */
+	if (!wait_for_completion_timeout(&fw_done, msecs_to_jiffies(10000))) {
+		pr_info("timed out waiting for firmware request\n");
+		ret = -ETIMEDOUT;
+		goto out;
+	}
+
+	if (!fw_found) {
+		ret = -ENODEV;
+		goto out;
+	}
 
 	return 0;
 out:
