@@ -287,10 +287,11 @@ void dwc2_hcd_connect(struct dwc2_hsotg *hsotg)
  * dwc2_hcd_disconnect() - Handles disconnect of the HCD
  *
  * @hsotg: Pointer to struct dwc2_hsotg
+ * @force: If true, we won't try to reconnect even if we see device connected.
  *
  * Must be called with interrupt disabled and spinlock held
  */
-void dwc2_hcd_disconnect(struct dwc2_hsotg *hsotg)
+void dwc2_hcd_disconnect(struct dwc2_hsotg *hsotg, bool force)
 {
 	u32 intr;
 	u32 hprt0;
@@ -345,9 +346,11 @@ void dwc2_hcd_disconnect(struct dwc2_hsotg *hsotg)
 	 * Without the extra check here we will end calling disconnect
 	 * and won't get any future interrupts to handle the connect.
 	 */
-	hprt0 = dwc2_readl(hsotg->regs + HPRT0);
-	if (!(hprt0 & HPRT0_CONNDET) && (hprt0 & HPRT0_CONNSTS))
-		dwc2_hcd_connect(hsotg);
+	if (!force) {
+		hprt0 = dwc2_readl(hsotg->regs + HPRT0);
+		if (!(hprt0 & HPRT0_CONNDET) && (hprt0 & HPRT0_CONNSTS))
+			dwc2_hcd_connect(hsotg);
+	}
 }
 
 /**
@@ -2422,7 +2425,7 @@ static void _dwc2_hcd_stop(struct usb_hcd *hcd)
 
 	spin_lock_irqsave(&hsotg->lock, flags);
 	/* Ensure hcd is disconnected */
-	dwc2_hcd_disconnect(hsotg);
+	dwc2_hcd_disconnect(hsotg, true);
 	dwc2_hcd_stop(hsotg);
 	hsotg->lx_state = DWC2_L3;
 	hcd->state = HC_STATE_HALT;
