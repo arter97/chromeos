@@ -211,6 +211,8 @@ enum wmi_10x_service {
 	WMI_10X_SERVICE_ADJ_RADIO_SPECTRAL_INTERFRC,
 	WMI_10X_SERVICE_ADJ_RADIO_SURVEY_INTERFRC,
 	WMI_10X_SERVICE_CHAN_SURVEY,
+	WMI_10X_SERVICE_MESH,
+	WMI_10X_SERVICE_EXT_RES_CFG_SUPPORT,
 };
 
 enum wmi_main_service {
@@ -457,6 +459,10 @@ static inline void wmi_10x_svc_map(const __le32 *in, unsigned long *out,
 	       WMI_SERVICE_AUX_CHAN_LOAD_INTF, len);
 	SVCMAP(WMI_10X_SERVICE_CHAN_SURVEY,
 	       WMI_SERVICE_BSS_CHANNEL_INFO_64, len);
+	SVCMAP(WMI_10X_SERVICE_MESH,
+	       WMI_SERVICE_MESH, len);
+	SVCMAP(WMI_10X_SERVICE_EXT_RES_CFG_SUPPORT,
+	       WMI_SERVICE_EXT_RES_CFG_SUPPORT, len);
 }
 
 static inline void wmi_main_svc_map(const __le32 *in, unsigned long *out,
