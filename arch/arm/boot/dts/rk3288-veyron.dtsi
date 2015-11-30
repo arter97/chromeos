@@ -396,6 +396,11 @@
 	status = "okay";
 };
 
+&power {
+	assigned-clocks = <&cru SCLK_EDP_24M>;
+	assigned-clock-parents = <&xin24m>;
+};
+
 &pwm1 {
 	status = "okay";
 };
