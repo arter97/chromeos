@@ -63,6 +63,14 @@ enum hdmi_audio_channelnum {
 	AUDIO_CHANNELNUM_8 = 0x0F,
 };
 
+#define AUDIO_INPUTCLKFS_MASK		0x07
+enum hdmi_audio_clkfs {
+	AUDIO_INPUTCLKFS_128 = 0,
+	AUDIO_INPUTCLKFS_256 = 1,
+	AUDIO_INPUTCLKFS_512 = 2,
+	AUDIO_INPUTCLKFS_64  = 4,
+};
+
 enum hdmi_jack_status {
 	JACK_LINEOUT,
 	JACK_NO_LINEOUT,
