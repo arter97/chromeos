@@ -77,7 +77,13 @@ static void dw_hdmi_audio_set_fmt(struct snd_dw_hdmi *hdmi,
 	hdmi->data.mod(hdmi->data.dw, fmt->dai_fmt,
 		       AUDIO_CONF1_DATAMODE_MSK, HDMI_AUD_CONF1);
 
-	hdmi->data.write(hdmi->data.dw, 0, HDMI_AUD_INPUTCLKFS);
+	/*
+	 * HACK: Due to the rockchip i2s code just hardcode the clock
+	 * FS factor to 64, and haven't find a good way to let codec
+	 * receive the 'dynamic' FS factor, so just hardcode again.
+	 */
+	hdmi->data.write(hdmi->data.dw, AUDIO_INPUTCLKFS_64,
+			 HDMI_AUD_INPUTCLKFS);
 
 	hdmi->data.set_sample_rate(hdmi->data.dw, fmt->sample_rate);
 }
