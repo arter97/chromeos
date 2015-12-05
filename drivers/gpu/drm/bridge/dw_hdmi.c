@@ -99,6 +99,11 @@ static const struct dw_hdmi_audio_tmds_n common_tmds_n_table[] = {
 	{ .tmds = 148500000, .n_32k = 4096, .n_44k1 = 5488, .n_48k = 6144, },
 	{ .tmds = 154000000, .n_32k = 4096, .n_44k1 = 5544, .n_48k = 6144, },
 	{ .tmds = 162000000, .n_32k = 4096, .n_44k1 = 5684, .n_48k = 6144, },
+
+	/* For 297 MHz+ HDMI spec have some other rule for setting N */
+	{ .tmds = 297000000, .n_32k = 3073, .n_44k1 = 4704, .n_48k = 5120, },
+	{ .tmds = 594000000, .n_32k = 3073, .n_44k1 = 9408, .n_48k = 10240, },
+
 	/* End of table */
 	{ .tmds = 0,         .n_32k = 0,    .n_44k1 = 0,    .n_48k = 0, },
 };
@@ -706,40 +711,6 @@ static unsigned int hdmi_compute_n(struct dw_hdmi *hdmi,
 	unsigned int best_n = 0;
 	u64 best_diff = U64_MAX;
 	int n;
-
-	/*
-	 * Most of the complicated formulas in the HDMI spec are all trying to
-	 * deal with reducing error as much as possible if we know the exact
-	 * clock we're getting.
-	 *
-	 * We only know our clock to the kHz right now and that's not enough
-	 * for so much error reduction.  Just do the simple calculations.
-	 *
-	 * Note: for 297 MHz+ there's apparently some other rule for setting N
-	 * that's not just about keeping CTS integral, so keep the special cases
-	 * for 297.
-	 */
-	if (pixel_clk == 297000000) {
-		switch (freq) {
-		case 32000:
-			return (128 * freq) / 1333;
-		case 44100:
-		case 48000:
-		case 88200:
-		case 96000:
-		case 176400:
-			return (128 * freq) / 1200;
-		}
-	} else if (pixel_clk == 594000000) {
-		switch (freq) {
-		case 32000:
-			return (128 * freq) / 1333;
-		case 44100:
-		case 88200:
-		case 176400:
-			return (128 * freq) / 600;
-		}
-	}
 
 	/* If the ideal N could satisfy the audio math, then just take it */
 	if (hdmi_audio_math_diff(freq, ideal_n, pixel_clk) == 0)
