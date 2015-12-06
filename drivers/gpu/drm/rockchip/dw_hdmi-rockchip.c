@@ -84,6 +84,43 @@ static const int dw_hdmi_rates[] = {
 	162000000,
 };
 
+/*
+ * There are some rates that would be ranged for better clock jitter at
+ * Chrome OS tree, like 25.175Mhz would range to 25.170732Mhz. But due
+ * to the clock is aglined to KHz in struct drm_display_mode, this would
+ * bring some inaccurate error if we still run the compute_n math, so
+ * let's just code an const table for it until we can actually get the
+ * right clock rate.
+ */
+static const struct dw_hdmi_audio_tmds_n rockchip_werid_tmds_n_table[] = {
+	/* 25170732 for 25.175 MHz */
+	{ .tmds = 25171000, .n_32k = 5248, .n_44k1 = 6027, .n_48k = 6560, },
+	/* 57290323 for 57.284 MHz */
+	{ .tmds = 57291000, .n_32k = 3968, .n_44k1 = 4557, .n_48k = 5952, },
+	/* 73263158 for 73.25 MHz */
+	{ .tmds = 73264000, .n_32k = 4256, .n_44k1 = 5586, .n_48k = 6080, },
+	/* 74400000 for 74.44 MHz */
+	{ .tmds = 74400000, .n_32k = 4096, .n_44k1 = 5586, .n_48k = 6144, },
+	/* 78720000 for 78.75 MHz */
+	{ .tmds = 78720000, .n_32k = 4096, .n_44k1 = 5586, .n_48k = 6144, },
+	/* 83520000 for 83.5 MHz */
+	{ .tmds = 83520000, .n_32k = 4096, .n_44k1 = 5635, .n_48k = 6144, },
+	/* 88695653 for 88.75 MHz */
+	{ .tmds = 88696000, .n_32k = 4416, .n_44k1 = 6762, .n_48k = 5888, },
+	/* 97714285 for 97.75 MHz */
+	{ .tmds = 97715000, .n_32k = 4480, .n_44k1 = 5488, .n_48k = 6272, },
+	/* 101052632 for 101.00 MHz */
+	{ .tmds = 101053000, .n_32k = 4104, .n_44k1 = 5586, .n_48k = 6156, },
+	/* 118666667 for 118.68 MHz */
+	{ .tmds = 118667000, .n_32k = 4224, .n_44k1 = 5292, .n_48k = 6336, },
+	/* 121714286 for 121.75 MHz */
+	{ .tmds = 121715000, .n_32k = 4480, .n_44k1 = 6174, .n_48k = 6272, },
+	/* 136800000 for 136.75 MHz */
+	{ .tmds = 136800000, .n_32k = 4096, .n_44k1 = 5684, .n_48k = 6144, },
+	/* End of table */
+	{ .tmds = 0,         .n_32k = 0,    .n_44k1 = 0,    .n_48k = 0, },
+};
+
 static const struct dw_hdmi_mpll_config rockchip_mpll_cfg[] = {
 	{
 		30666000, {
@@ -401,6 +438,7 @@ static const struct dw_hdmi_plat_data rockchip_hdmi_drv_data = {
 	.cur_ctr    = rockchip_cur_ctr,
 	.phy_config = rockchip_phy_config,
 	.dev_type   = RK3288_HDMI,
+	.tmds_n_table = rockchip_werid_tmds_n_table,
 };
 
 static const struct of_device_id dw_hdmi_rockchip_ids[] = {
