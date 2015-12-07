@@ -747,8 +747,8 @@ static unsigned int hdmi_find_n(struct dw_hdmi *hdmi, unsigned long pixel_clk)
 	if (n > 0)
 		return n;
 
-	dev_warn(hdmi->dev, "Sample rate %d couldn't found in table, suppose to"
-		 "compute the best N dynamically!\n", hdmi->sample_rate);
+	dev_warn(hdmi->dev, "Rate %lu missing; compute N dynamically\n",
+		 pixel_clk);
 
 	return hdmi_compute_n(hdmi, pixel_clk);
 }
