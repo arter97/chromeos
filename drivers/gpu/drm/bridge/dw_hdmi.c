@@ -226,8 +226,8 @@ struct dw_hdmi {
 
 	unsigned int sample_rate;
 
-	/* this mutex is used for audio clock control */
-	struct mutex audio_mutex;
+	/* this spinlock is used for audio clock control */
+	spinlock_t audio_lock;
 	bool audio_enable;
 
 	/* this mutex protects HPD config; used in threaded IRQ handler */
@@ -1746,38 +1746,46 @@ static void dw_hdmi_audio_clk_disable(struct dw_hdmi *hdmi)
 
 static void dw_hdmi_audio_restore(struct dw_hdmi *hdmi)
 {
-	mutex_lock(&hdmi->audio_mutex);
+	unsigned long flags;
+
+	spin_lock_irqsave(&hdmi->audio_lock, flags);
 
 	if (hdmi->audio_enable)
 		dw_hdmi_audio_clk_enable(hdmi);
 	else
 		dw_hdmi_audio_clk_disable(hdmi);
 
-	mutex_unlock(&hdmi->audio_mutex);
+	spin_unlock_irqrestore(&hdmi->audio_lock, flags);
 }
 
+/* NOTE: may be called with IRQs disabled */
 static void dw_hdmi_audio_enable(struct dw_hdmi *hdmi)
 {
-	mutex_lock(&hdmi->audio_mutex);
+	unsigned long flags;
+
+	spin_lock_irqsave(&hdmi->audio_lock, flags);
 
 	if (!hdmi->audio_enable) {
 		hdmi->audio_enable = true;
 		dw_hdmi_audio_clk_enable(hdmi);
 	}
 
-	mutex_unlock(&hdmi->audio_mutex);
+	spin_unlock_irqrestore(&hdmi->audio_lock, flags);
 }
 
+/* NOTE: may be called with IRQs disabled */
 static void dw_hdmi_audio_disable(struct dw_hdmi *hdmi)
 {
-	mutex_lock(&hdmi->audio_mutex);
+	unsigned long flags;
+
+	spin_lock_irqsave(&hdmi->audio_lock, flags);
 
 	if (hdmi->audio_enable) {
 		hdmi->audio_enable = false;
 		dw_hdmi_audio_clk_disable(hdmi);
 	}
 
-	mutex_unlock(&hdmi->audio_mutex);
+	spin_unlock_irqrestore(&hdmi->audio_lock, flags);
 }
 
 /* HDMI Initialization Step B.4 */
@@ -2588,11 +2596,11 @@ int dw_hdmi_bind(struct device *dev, struct device *master,
 	hdmi->sample_rate = 48000;
 	hdmi->encoder = encoder;
 	hdmi->audio_enable = false;
-	mutex_init(&hdmi->audio_mutex);
 	mutex_init(&hdmi->hpd_mutex);
 	mutex_init(&hdmi->hdcp_key_mutex);
 	mutex_init(&hdmi->hdcp_state_mutex);
 
+	spin_lock_init(&hdmi->audio_lock);
 	spin_lock_init(&hdmi->reg_lock);
 
 	of_property_read_u32(np, "reg-io-width", &val);

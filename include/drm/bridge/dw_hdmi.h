@@ -75,8 +75,10 @@ struct dw_hdmi_audio_data {
 	void (*write)(struct dw_hdmi *hdmi, u8 val, int offset);
 	void (*mod)(struct dw_hdmi *hdmi, u8 data, u8 mask, unsigned reg);
 
+	/* NOTE: enable/disable may be called with IRQs disabled */
 	void (*enable)(struct dw_hdmi *hdmi);
 	void (*disable)(struct dw_hdmi *hdmi);
+
 	void (*set_sample_rate)(struct dw_hdmi *hdmi, unsigned int rate);
 };
 
