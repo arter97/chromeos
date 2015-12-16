@@ -156,7 +156,8 @@ ENTRY(ia32_sysenter_target)
 	CFI_REMEMBER_STATE
 	jnz  sysenter_tracesys
 #ifdef CONFIG_ALT_SYSCALL
-	cmpq	TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%rax
+	movl	TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%r11d
+	cmpq	%r11,%rax
 	jae	ia32_badsys
 #else
 	cmpq	$(IA32_NR_syscalls-1),%rax
@@ -205,7 +206,8 @@ sysexit_from_sys_call:
 	call __audit_syscall_entry
 	movl RAX-ARGOFFSET(%rsp),%eax	/* reload syscall number */
 #ifdef CONFIG_ALT_SYSCALL
-	cmpq TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%rax
+	mvol TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%r11d
+	cmpq %r11,%rax
 	jae ia32_badsys
 #else
 	cmpq $(IA32_NR_syscalls-1),%rax
@@ -263,7 +265,8 @@ sysenter_tracesys:
 	LOAD_ARGS32 ARGOFFSET  /* reload args from stack in case ptrace changed it */
 	RESTORE_REST
 #ifdef CONFIG_ALT_SYSCALL
-	cmpq	TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%rax
+	movl	TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%r11d
+	cmpq	%r11,%rax
 	jae	int_ret_from_sys_call
 #else
 	cmpq	$(IA32_NR_syscalls-1),%rax
@@ -333,7 +336,8 @@ ENTRY(ia32_cstar_target)
 	CFI_REMEMBER_STATE
 	jnz   cstar_tracesys
 #ifdef CONFIG_ALT_SYSCALL
-	cmpq TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%rax
+	movl TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%r11d
+	cmpq %r11,%rax
 	jae  ia32_badsys
 #else
 	cmpq $IA32_NR_syscalls-1,%rax
@@ -395,7 +399,8 @@ cstar_tracesys:
 	RESTORE_REST
 	xchgl %ebp,%r9d
 #ifdef CONFIG_ALT_SYSCALL
-	cmpq TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%rax
+	movl TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%r11d
+	cmpq %r11,%rax
 	jae int_ret_from_sys_call
 #else
 	cmpq $(IA32_NR_syscalls-1),%rax
@@ -457,7 +462,8 @@ ENTRY(ia32_syscall)
 	testl $_TIF_WORK_SYSCALL_ENTRY,TI_flags+THREAD_INFO(%rsp,RIP-ARGOFFSET)
 	jnz ia32_tracesys
 #ifdef CONFIG_ALT_SYSCALL
-	cmpq TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%rax
+	movl TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%r11d
+	cmpq %r11,%rax
 	jae ia32_badsys
 #else
 	cmpq $(IA32_NR_syscalls-1),%rax
@@ -486,7 +492,8 @@ ia32_tracesys:
 	LOAD_ARGS32 ARGOFFSET  /* reload args from stack in case ptrace changed it */
 	RESTORE_REST
 #ifdef CONFIG_ALT_SYSCALL
-	cmpq TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%rax
+	movl TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%r11d
+	cmpq %r11,%rax
 	jae  int_ret_from_sys_call
 #else
 	cmpq $(IA32_NR_syscalls-1),%rax
