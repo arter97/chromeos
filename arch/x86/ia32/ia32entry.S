@@ -206,7 +206,7 @@ sysexit_from_sys_call:
 	call __audit_syscall_entry
 	movl RAX-ARGOFFSET(%rsp),%eax	/* reload syscall number */
 #ifdef CONFIG_ALT_SYSCALL
-	mvol TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%r11d
+	movl TI_ia32_nr_syscalls+THREAD_INFO(%rsp,RIP-ARGOFFSET),%r11d
 	cmpq %r11,%rax
 	jae ia32_badsys
 #else
